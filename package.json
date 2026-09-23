@@ -1,0 +1,61 @@
+{
+  "name": "df-throwables-calc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "三角洲行动投掷物弹道尺子（离线计算 / 置顶对照）",
+  "author": "DF Throwables Calc",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "verify": "tsx src/verify.ts",
+    "desktop": "npm run build && electron .",
+    "desktop:dev": "concurrently -k -n vite,electron -c cyan,magenta \"vite\" \"wait-on http://127.0.0.1:5173 && cross-env DF_DESKTOP_DEV=1 electron .\"",
+    "package": "npm run build && electron-builder --win portable",
+    "fix:electron": "node scripts/fix-electron.mjs"
+  },
+  "build": {
+    "appId": "local.df.throwables.calc",
+    "productName": "DF投掷物尺子",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/koffi/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "DF投掷物尺子-${version}-portable.${ext}"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^38.8.6",
+    "electron-builder": "^26.0.12",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "wait-on": "^9.0.1"
+  },
+  "dependencies": {
+    "koffi": "^3.3.1",
+    "uiohook-napi": "^1.5.5"
+  }
+}
