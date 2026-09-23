@@ -19,6 +19,7 @@ import { OPERATORS, UNIVERSAL_72, getOperator, type OperatorId } from './operato
 import { optionKey, solveAllActionOptions, type ThrowOption } from './options'
 import { drawTacticalTrajectory } from './trajChart'
 import { getCompTip } from './compTips'
+import { mountMapBoard, type MapBoardHandle } from './mapBoard'
 
 const ANGLE_MIN = -30
 const ANGLE_MAX = 90
@@ -121,6 +122,10 @@ function currentThrowable() {
   return op.throwables.find((t) => t.id === state.throwableId) ?? op.throwables[0]
 }
 
+let mapBoard: MapBoardHandle | null = null
+/** 地图「我的位置」→ 上方距离；由 wireEvents 注入 */
+let applyMapThrowDistance: (distanceM: number | null) => void = () => {}
+
 function buildApp(): void {
   const app = document.querySelector<HTMLDivElement>('#app')!
   const desktopBar = isDesktop
@@ -199,15 +204,15 @@ function buildApp(): void {
               <input type="number" id="pitch" min="${ANGLE_MIN}" max="${ANGLE_MAX}" step="0.1" value="${state.pitch}" />
             </div>
             <em class="field-note">准星视角；点 ! 看补角与出手高度</em>
-          </div>
+  </div>
 
           <div class="live-range">
             <em>当前仰角落点</em>
             <strong id="pitch-range-live">-- m</strong>
-          </div>
+  </div>
 
           <p class="hint" id="model-blurb"></p>
-        </section>
+</section>
 
         <section class="visual-panel">
           <div class="readout">
@@ -256,7 +261,7 @@ function buildApp(): void {
               次要数据（掐雷时间 / 移速 / 实际抛角θ）
             </label>
           </div>
-        </div>
+  </div>
         <p class="options-hint">拖动距离时实时刷新 · 点行即可套用该姿态与动作 · 按倒计时截止时间从大到小</p>
         <div class="options-table-wrap">
           <table class="options-table" id="options-table">
@@ -274,6 +279,32 @@ function buildApp(): void {
             </thead>
             <tbody id="options-body"></tbody>
           </table>
+  </div>
+</section>
+
+      <section class="map-bar">
+        <div class="map-head">
+          <h2>地图射程圈</h2>
+          <div class="map-tools">
+            <label class="map-scale-field">
+              已知距离 (m)
+              <input type="number" id="map-scale-m" min="1" max="500" step="0.1" placeholder="50" />
+            </label>
+            <button type="button" class="map-btn" id="map-calib">标定比例尺</button>
+            <button type="button" class="map-btn ghost" id="map-mode-blast">设爆点</button>
+            <button type="button" class="map-btn ghost" id="map-mode-self">设我的位置</button>
+            <button type="button" class="map-btn ghost" id="map-clear">清除标点</button>
+            <button type="button" class="map-btn ghost" id="map-reset">恢复初始</button>
+          </div>
+        </div>
+        <p class="map-hint">
+          ① 标定比例尺 → ②「设爆点」点地图 → ③ 需要时再手动点「设我的位置」标点。
+          两点间距会<strong>同步</strong>上方目标距离与「同爆点多方案」表。默认只显示站立静止圈，可叠加蹲姿/跳投。
+        </p>
+        <div class="map-layers" id="map-layers"></div>
+        <p class="map-status" id="map-status"></p>
+        <div class="map-stage">
+          <canvas id="map-canvas" width="1200" height="720"></canvas>
         </div>
       </section>
 
@@ -306,6 +337,14 @@ function buildApp(): void {
     if (pick) state.pitch = clampPitch(pick.alpha)
   }
   syncInputs()
+  const mapRoot = document.querySelector<HTMLElement>('.map-bar')
+  if (mapRoot) {
+    mapBoard?.destroy()
+    mapBoard = mountMapBoard(mapRoot, {
+      onThrowDistance: (m) => applyMapThrowDistance(m),
+    })
+    mapBoard.setDeltaH(state.deltaH)
+  }
   render()
 }
 
@@ -626,8 +665,13 @@ function wireEvents(): void {
     }
     if (pick) state.pitch = clampPitch(pick.alpha)
     syncInputs()
-    render()
     syncLock = false
+    render()
+  }
+
+  applyMapThrowDistance = (distanceM) => {
+    if (distanceM == null || !Number.isFinite(distanceM) || distanceM <= 0) return
+    syncTarget(Math.round(distanceM * 10) / 10)
   }
 
   const syncPitch = (v: number) => {
@@ -744,6 +788,7 @@ function wireEvents(): void {
     if (el.id === 'target' || el.id === 'target-range') syncTarget(parseFloat(el.value) || 0)
     else if (el.id === 'dh' || el.id === 'dh-range') {
       state.deltaH = parseFloat(el.value) || 0
+      mapBoard?.setDeltaH(state.deltaH)
       syncInputs()
       render()
     } else if (el.id === 'pitch' || el.id === 'pitch-range') syncPitch(parseFloat(el.value) || 0)
@@ -807,15 +852,37 @@ function wireEvents(): void {
     })
   }
 
+  // 滚轮改仰角：仅当指针在轨迹图 / 右侧标尺上；空白处滚轮只滚动页面
   window.addEventListener(
     'wheel',
     (e) => {
-      if ((e.target as HTMLElement).closest('input, .input-panel, .options-bar, .top-bar')) return
+      const t = e.target as HTMLElement
+      const onPitchSurface = Boolean(
+        t.closest('#traj, #ruler, .pitch-scale, .traj-stage'),
+      )
+      if (!onPitchSurface) return
       e.preventDefault()
       syncPitch(state.pitch - e.deltaY * 0.02)
     },
     { passive: false },
   )
+
+  // 数字/滑条：未聚焦时滚轮不改数值，改为滚动页面
+  root.querySelectorAll<HTMLInputElement>(
+    'input[type="number"], input[type="range"]',
+  ).forEach((input) => {
+    input.addEventListener(
+      'wheel',
+      (e) => {
+        if (document.activeElement === input) return
+        e.preventDefault()
+        const scroller = document.scrollingElement
+        if (scroller) scroller.scrollTop += e.deltaY
+      },
+      { passive: false },
+    )
+  })
+
   window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowUp') {
       e.preventDefault()
