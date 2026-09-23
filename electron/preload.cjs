@@ -6,12 +6,9 @@ contextBridge.exposeInMainWorld('dfDesktop', {
   setClickThrough: (enabled) => ipcRenderer.send('desktop:set-click-through', enabled),
   setPassthroughIgnore: (ignore) =>
     ipcRenderer.send('desktop:set-passthrough-ignore', ignore),
-  toggleSlim: () => ipcRenderer.send('desktop:toggle-slim'),
   setSlim: (enabled) => ipcRenderer.send('desktop:set-slim', enabled),
   close: () => ipcRenderer.send('desktop:close'),
   setFollow: (enabled) => ipcRenderer.send('desktop:set-follow', enabled),
-  setSens: (payload) => ipcRenderer.send('desktop:set-sens', payload),
-  calibrate: (payload) => ipcRenderer.invoke('desktop:calibrate', payload),
   onClickThrough: (cb) => {
     ipcRenderer.on('desktop:click-through', (_e, v) => cb(v))
   },

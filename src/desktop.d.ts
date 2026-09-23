@@ -27,15 +27,9 @@ export interface DfDesktopApi {
   setClickThrough: (enabled: boolean) => void
   /** 穿透开启时：true=忽略鼠标（点穿），false=本窗可点 */
   setPassthroughIgnore: (ignore: boolean) => void
-  toggleSlim: () => void
   setSlim: (enabled: boolean) => void
   close: () => void
   setFollow: (enabled: boolean) => void
-  setSens: (payload: { degPerCount?: number; invertY?: boolean }) => void
-  calibrate: (payload: {
-    mouseCounts: number
-    degrees: number
-  }) => Promise<{ ok: boolean; degPerCount?: number; reason?: string }>
   onClickThrough: (cb: (v: boolean) => void) => void
   onSlim: (cb: (v: boolean) => void) => void
   onMouseDelta: (cb: (v: MouseDeltaInfo) => void) => void

@@ -34,7 +34,6 @@ body {
     linear-gradient(165deg, var(--bg0), var(--bg1) 55%, #070c12);
 }
 
-body.overlay,
 body.desktop {
   background: transparent !important;
 }
@@ -685,54 +684,6 @@ input[type='range'] {
   font-size: 12px;
 }
 
-.actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.btn {
-  flex: 1;
-  appearance: none;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: linear-gradient(180deg, #4ecf7a, #2f9a55);
-  color: #04140a;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.btn.ghost {
-  background: transparent;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.band-box {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 176, 32, 0.35);
-  background: rgba(80, 50, 10, 0.25);
-}
-
-.band-box strong {
-  display: block;
-  font-size: 13px;
-  color: var(--warn);
-  margin-bottom: 4px;
-}
-
-.band-box p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: #e8d9b0;
-}
-
 .live-range {
   margin: 8px 0 4px;
   padding: 8px 10px;
@@ -1162,16 +1113,6 @@ body.desktop.ruler-only #ruler {
   display: none !important;
 }
 
-.desktop-hotkeys {
-  margin: 4px 10px 8px;
-  font-size: 10px;
-  color: rgba(200, 210, 220, 0.65);
-}
-
-.desktop-dock {
-  display: none;
-}
-
 body.desktop.ruler-only #app {
   display: flex;
   flex-direction: column;
@@ -1267,14 +1208,6 @@ body.desktop.minimal-ruler .desk-exit-minimal:hover {
   opacity: 1;
 }
 
-body.desktop.slim.overlay .top-bar,
-body.desktop.slim.overlay .input-panel,
-body.desktop.slim.overlay .preset-bar,
-body.desktop.slim.overlay .tactics-bar,
-body.desktop.slim.overlay .options-bar,
-body.desktop.slim.overlay .readout,
-body.desktop.slim.overlay #traj,
-body.desktop.slim.overlay .map-bar,
 body.desktop.ruler-only .top-bar,
 body.desktop.ruler-only .input-panel,
 body.desktop.ruler-only .preset-bar,
@@ -1289,12 +1222,10 @@ body.desktop.ruler-only .visual-panel > .readout {
   display: none !important;
 }
 
-body.desktop.slim.overlay .main-grid,
 body.desktop.ruler-only .main-grid {
   grid-template-columns: 1fr;
 }
 
-body.desktop.slim.overlay .viz-row,
 body.desktop.ruler-only .viz-row {
   grid-template-columns: 1fr;
   min-height: 0;
@@ -1330,20 +1261,15 @@ body.desktop.ruler-only .ruler-wrap {
   min-height: 0;
 }
 
-body.desktop.slim.overlay #ruler,
 body.desktop.ruler-only #ruler {
   min-height: 0;
   height: 100%;
 }
 
-body.desktop.ruler-only .desktop-hotkeys {
-  display: none;
-}
-
 body.desktop.ruler-only .desktop-dock {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   flex: 0 0 auto;
   padding: 4px 3px 5px;
   margin: 0;
@@ -1351,6 +1277,39 @@ body.desktop.ruler-only .desktop-dock {
   background: rgba(0, 0, 0, var(--desk-bg-alpha, 0.41));
   border: 1px solid rgba(255, 255, 255, calc(0.12 * var(--desk-bg-alpha, 0.41) / 0.41));
   -webkit-app-region: no-drag;
+}
+
+body.desktop.ruler-only .desk-sec-head {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+body.desktop.ruler-only .desk-live {
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.desktop.ruler-only .desk-live-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 2px;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+body.desktop.ruler-only .desk-live-grid strong {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+body.desktop.ruler-only .desk-aim {
+  padding-top: 1px;
 }
 
 body.desktop.ruler-only .desk-alpha {
@@ -1363,13 +1322,13 @@ body.desktop.ruler-only .desk-alpha {
 body.desktop.ruler-only .desk-alpha em {
   font-style: normal;
   font-size: 10px;
-  color: var(--muted);
+  color: rgba(255, 150, 150, 0.85);
 }
 
 body.desktop.ruler-only .desk-alpha strong {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: var(--accent);
+  color: rgba(255, 120, 120, 0.98);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1439,14 +1398,6 @@ body.desktop.ruler-only .desk-chip.active {
 
 body.desktop.click-through .desktop-bar {
   outline: 1px solid rgba(255, 176, 32, 0.55);
-}
-
-body.overlay .input-panel {
-  opacity: 0.2;
-}
-
-body.desktop.panel-open .input-panel {
-  opacity: 1;
 }
 
 @media (max-width: 980px) {

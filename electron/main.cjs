@@ -22,9 +22,9 @@ const DEV_URL = process.env.DF_DEV_URL || 'http://127.0.0.1:5173'
 
 function placeLeft(browserWindow) {
   const display = screen.getPrimaryDisplay()
-  const { width: sw, height: sh } = display.workAreaSize
+  const { height: sh } = display.workAreaSize
   const { x: wx, y: wy } = display.workArea
-  const w = slim ? 200 : Math.min(980, Math.floor(sw * 0.55))
+  const w = 200
   const h = Math.min(sh - 20, 920)
   browserWindow.setBounds({
     x: wx + 8,
@@ -130,13 +130,6 @@ function setPassthroughIgnore(ignore) {
   else win.setIgnoreMouseEvents(false)
 }
 
-function toggleSlim() {
-  slim = !slim
-  if (!win) return
-  placeLeft(win)
-  win.webContents.send('desktop:slim', slim)
-}
-
 function setSlim(next) {
   slim = !!next
   if (!win) return
@@ -183,9 +176,6 @@ app.whenReady().then(() => {
   ipcMain.on('desktop:set-passthrough-ignore', (_e, ignore) => {
     setPassthroughIgnore(!!ignore)
   })
-  ipcMain.on('desktop:toggle-slim', () => {
-    toggleSlim()
-  })
   ipcMain.on('desktop:set-slim', (_e, enabled) => {
     setSlim(!!enabled)
   })
@@ -195,34 +185,6 @@ app.whenReady().then(() => {
   ipcMain.on('desktop:set-follow', (_e, enabled) => {
     if (enabled) startMouseFollow()
     else stopMouseFollow()
-  })
-  ipcMain.on('desktop:set-sens', (_e, payload) => {
-    if (payload && typeof payload.degPerCount === 'number' && payload.degPerCount > 0) {
-      degPerCount = payload.degPerCount
-    }
-    if (payload && typeof payload.invertY === 'boolean') {
-      invertY = payload.invertY
-    }
-    win?.webContents.send('desktop:follow', {
-      active: followMouse,
-      degPerCount,
-      invertY,
-    })
-  })
-  ipcMain.handle('desktop:calibrate', (_e, payload) => {
-    // payload: { mouseCounts, degrees } → degPerCount = degrees / counts
-    const counts = Math.abs(Number(payload?.mouseCounts) || 0)
-    const degrees = Math.abs(Number(payload?.degrees) || 0)
-    if (counts < 1 || degrees < 0.1) {
-      return { ok: false, reason: '标定样本不足' }
-    }
-    degPerCount = degrees / counts
-    win?.webContents.send('desktop:follow', {
-      active: followMouse,
-      degPerCount,
-      invertY,
-    })
-    return { ok: true, degPerCount }
   })
 
   app.on('activate', () => {

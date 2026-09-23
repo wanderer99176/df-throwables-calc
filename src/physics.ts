@@ -9,11 +9,9 @@ export const H0_PRONE = 0.3
 export const H0_STAND = 1.8
 
 export const LUNA_FUSE_S = 5.0
-export const LUNA_PULL_S = 0.33
 export const LUNA_AIRBURST_S = 4.7
 export const LUNA_BOUNCE_S = 0.3
 export const LUNA_BOUNCE_M = 3
-export const LUNA_RULE_MPS = 20
 
 import { type ActionModeId, getActionMode } from './actionModes'
 
@@ -210,26 +208,6 @@ export function solveAnglesForRange(targetM: number, params: ThrowParams): Angle
     maxRangeAlpha: maxA,
     unreachable: false,
   }
-}
-
-export function sampleTrajectory(
-  alphaDeg: number,
-  params: ThrowParams,
-  steps = 48,
-): Array<{ x: number; y: number }> {
-  const r = rangeAtAngle(alphaDeg, params)
-  if (r.flightTime <= 0) return [{ x: 0, y: r.h0 }]
-  const v0 = params.v0 ?? V0
-  const offset = params.offsetDeg ?? THETA_OFFSET_DEG
-  const theta = deg2rad(alphaDeg + offset)
-  const vy0 = v0 * Math.sin(theta)
-  const vx = v0 * Math.cos(theta) + r.vMove
-  const out: Array<{ x: number; y: number }> = []
-  for (let i = 0; i <= steps; i++) {
-    const t = (r.flightTime * i) / steps
-    out.push({ x: vx * t, y: r.h0 + vy0 * t - 0.5 * G * t * t })
-  }
-  return out
 }
 
 export function resolveH0Author(alphaDeg: number): number {

@@ -32,7 +32,6 @@ interface AppState {
   deltaH: number
   actionId: ActionModeId
   pitch: number
-  overlay: boolean
   /** 次要列（移速/θ）展开 */
   showDetailCols: boolean
   /** 显示非精选动作行 */
@@ -52,7 +51,6 @@ const state: AppState = {
   deltaH: 0,
   actionId: 'stand_still',
   pitch: 27,
-  overlay: false,
   showDetailCols: false,
   showAllOptions: false,
   showRulerDetail: false,
@@ -65,17 +63,22 @@ const isDesktop =
   bootParams.get('desktop') === '1' || Boolean(window.dfDesktop?.isDesktop)
 const bootSlim = bootParams.get('slim') !== '0'
 
-if (isDesktop) {
-  // 桌面默认：窄窗 + 仅标尺；点「面板」再展开计算器
-  state.overlay = false
-  state.showRulerDetail = true
-  document.body.classList.add('desktop', 'ruler-only')
-  if (bootSlim) document.body.classList.add('slim')
-}
-
 let syncLock = false
 /** 桌面侧边尺烟玻底色 alpha（仅底，刻度另控） */
 let deskUiOpacity = 0.41
+/** 桌面「目标标注」：固定红虚线用，不随跟随/绿线改写 */
+let deskAimR = 72
+let deskAimDh = 0
+
+if (isDesktop) {
+  // 桌面默认：窄窗 + 仅标尺
+  state.showRulerDetail = true
+  document.body.classList.add('desktop', 'ruler-only')
+  if (bootSlim) document.body.classList.add('slim')
+  deskAimR = state.targetM
+  deskAimDh = state.deltaH
+}
+
 let applyPitch: (v: number) => void = (v) => {
   state.pitch = clampPitch(v)
 }
@@ -259,10 +262,21 @@ function buildApp(): void {
                 ${
                   isDesktop
                     ? `<div class="desktop-dock" id="desktop-dock">
-                  <div class="desk-alpha"><em>仰角 α</em><strong id="desk-alpha-v">--°</strong></div>
-                  <div class="desk-fields">
-                    <label class="desk-field">R<input type="number" id="desk-target" min="1" max="100" step="0.5" value="${state.targetM}" title="目标距离(m)" /></label>
-                    <label class="desk-field">Δh<input type="number" id="desk-dh" min="-30" max="40" step="0.5" value="${state.deltaH}" title="相对高度差(m)" /></label>
+                  <div class="desk-live" id="desk-live">
+                    <div class="desk-sec-head">跟随实时</div>
+                    <div class="desk-live-grid">
+                      <span>α<strong id="desk-live-alpha">--°</strong></span>
+                      <span>R<strong id="desk-live-r">--</strong></span>
+                      <span>Δh<strong id="desk-live-dh">--</strong></span>
+                    </div>
+                  </div>
+                  <div class="desk-aim" id="desk-aim">
+                    <div class="desk-sec-head">目标标注 · 红虚</div>
+                    <div class="desk-alpha"><em>标 α</em><strong id="desk-alpha-v">--°</strong></div>
+                    <div class="desk-fields">
+                      <label class="desk-field">R<input type="number" id="desk-target" min="1" max="100" step="0.5" value="${deskAimR}" title="目标距离(m)，固定红虚线" /></label>
+                      <label class="desk-field">Δh<input type="number" id="desk-dh" min="-30" max="40" step="0.5" value="${deskAimDh}" title="相对高度差(m)，固定红虚线" /></label>
+                    </div>
                   </div>
                   <div class="desk-actions" id="desk-actions"></div>
                 </div>`
@@ -702,8 +716,7 @@ function syncInputs(): void {
   set('#dh-range', state.deltaH)
   set('#pitch', state.pitch.toFixed(1))
   set('#pitch-range', state.pitch)
-  set('#desk-target', state.targetM)
-  set('#desk-dh', state.deltaH)
+  // 桌面目标标注输入不随跟随改写
   document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((b) => {
     b.classList.toggle('active', b.dataset.action === state.actionId)
   })
@@ -927,14 +940,16 @@ function wireEvents(): void {
   root.addEventListener('input', (ev) => {
     const el = ev.target as HTMLInputElement
     if (!(el instanceof HTMLInputElement)) return
-    // 桌面侧边尺：只更新目标距离/高度，反解红虚线仰角，不改当前绿线/不拖最远点
+    // 桌面「目标标注」：只改固定红虚线，不改绿线 / 不改跟随实时读数源
     if (el.id === 'desk-target') {
-      state.targetM = Math.max(0.1, parseFloat(el.value) || 0)
+      deskAimR = Math.max(0.1, parseFloat(el.value) || 0)
       render()
       return
     }
     if (el.id === 'desk-dh') {
-      state.deltaH = parseFloat(el.value) || 0
+      deskAimDh = parseFloat(el.value) || 0
+      // 手动改标注高差时，同步物理 Δh，便于绿线落地读数同一地形
+      state.deltaH = deskAimDh
       mapBoard?.setDeltaH(state.deltaH)
       render()
       return
@@ -1087,7 +1102,6 @@ function wireDesktop(): void {
     deskUiOpacity = sliderToBgAlpha(s)
     document.documentElement.style.setProperty('--desk-bg-alpha', String(deskUiOpacity))
     document.documentElement.style.setProperty('--desk-mark-alpha', String(sliderToMarkAlpha(s)))
-    document.documentElement.style.removeProperty('--desk-fade')
     const range = document.querySelector<HTMLInputElement>('#desk-opacity-range')
     const val = document.querySelector('#desk-opacity-val')
     if (range && range.value !== String(s)) range.value = String(s)
@@ -1242,7 +1256,7 @@ function wireDesktop(): void {
 
   state.showRulerDetail = true
   document.body.classList.add('ruler-only', 'slim')
-  document.body.classList.remove('panel-open', 'minimal-ruler')
+  document.body.classList.remove('minimal-ruler')
   document.body.classList.toggle('ruler-detail', true)
   api?.setSlim?.(true)
   savedOpacitySlider = readSavedSlider()
@@ -1276,10 +1290,28 @@ function render(): void {
     const pick = sol.low ?? sol.high
     const safe = (n: number, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '--')
 
+    // 桌面固定红虚：来自标注框，与跟随绿线解耦
+    const aimMarkP = isDesktop
+      ? { ...p, deltaH: deskAimDh }
+      : p
+    const aimMarkLand = isDesktop ? aimLandForDeclare(deskAimR) : aimLand
+    const aimMarkSol = isDesktop
+      ? solveAnglesForRange(aimMarkLand, aimMarkP)
+      : sol
+    const aimMark = aimMarkSol.low ?? aimMarkSol.high
+
     const alphaShow = pick ? pick.alpha : state.pitch
     setText('#action-v', mode.title)
     setText('#alpha-v', `${safe(alphaShow, 1)}°`)
-    setText('#desk-alpha-v', pick ? `${safe(pick.alpha, 1)}°` : '--°')
+    setText('#desk-alpha-v', aimMark ? `${safe(aimMark.alpha, 1)}°` : '--°')
+    setText('#desk-live-alpha', `${safe(state.pitch, 1)}°`)
+    setText(
+      '#desk-live-r',
+      Number.isFinite(cur.range) && cur.range > 0.5
+        ? `${safe(declareRangeM(cur, th), 1)}`
+        : '--',
+    )
+    setText('#desk-live-dh', `${safe(state.deltaH, 1)}`)
     setText('#range-v', `${safe(cur.range, 1)}m`)
     setText('#time-v', `${safe(cur.flightTime, 2)}s`)
     if (canApplyProbe(cur, th)) {
@@ -1333,7 +1365,7 @@ function render(): void {
       console.error(e)
     }
     try {
-      drawRuler(cur, pick)
+      drawRuler(cur, isDesktop ? aimMark : pick)
       positionPitchTag(state.pitch)
     } catch (e) {
       console.error(e)

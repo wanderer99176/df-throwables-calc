@@ -1,6 +1,6 @@
 /** 地图射程圈：各动作最大水平射程（平射 Δh=0） */
 
-import { type ActionModeId, getActionMode } from './actionModes'
+import { type ActionModeId } from './actionModes'
 import { findMaxRangeAngle, type ThrowParams } from './physics'
 
 export interface MapRingLayer {
@@ -16,7 +16,7 @@ export interface MapRingLayer {
   defaultOn: boolean
 }
 
-/** 与需求对齐：默认静止；蹲姿 / 跳投可选叠加（取该族更远的叠速解） */
+/** 默认静止；蹲姿 / 跳投可选叠加 */
 export const MAP_RING_LAYERS: MapRingLayer[] = [
   {
     id: 'still',
@@ -55,10 +55,4 @@ export function maxRangeForAction(
   }
   const { alpha, result } = findMaxRangeAngle(params)
   return { rangeM: result.range, alpha }
-}
-
-export function ringLegendLine(layer: MapRingLayer, deltaH = 0): string {
-  const { rangeM, alpha } = maxRangeForAction(layer.actionId, deltaH)
-  const mode = getActionMode(layer.actionId)
-  return `${layer.label} · 最远 ${rangeM.toFixed(1)}m @${alpha.toFixed(0)}°（${mode.detail}）`
 }
