@@ -20,6 +20,7 @@ import { optionKey, solveAllActionOptions, type ThrowOption } from './options'
 import { drawTacticalTrajectory } from './trajChart'
 import { getCompTip } from './compTips'
 import { mountMapBoard, type MapBoardHandle } from './mapBoard'
+import { MAPS, getMap, loadActiveMapId } from './maps'
 
 const ANGLE_MIN = -30
 const ANGLE_MAX = 90
@@ -286,21 +287,45 @@ function buildApp(): void {
         <div class="map-head">
           <h2>地图射程圈</h2>
           <div class="map-tools">
-            <label class="map-scale-field">
-              已知距离 (m)
-              <input type="number" id="map-scale-m" min="1" max="500" step="0.1" placeholder="50" />
-            </label>
-            <button type="button" class="map-btn" id="map-calib">标定比例尺</button>
+            <div class="map-switcher" id="map-switcher">
+              <button type="button" class="map-switch-btn" id="map-switch-btn" aria-expanded="false">
+                <span class="map-switch-icon" aria-hidden="true"></span>
+                <span id="map-switch-label">航天基地</span>
+                <span class="map-switch-caret">▾</span>
+              </button>
+              <div class="map-switch-menu" id="map-switch-menu" hidden>
+                <div class="map-switch-head">
+                  <span class="map-switch-icon" aria-hidden="true"></span>
+                  切换地图
+                </div>
+                <div class="map-switch-list" id="map-switch-list"></div>
+              </div>
+            </div>
             <button type="button" class="map-btn ghost" id="map-mode-blast">设爆点</button>
             <button type="button" class="map-btn ghost" id="map-mode-self">设我的位置</button>
             <button type="button" class="map-btn ghost" id="map-clear">清除标点</button>
             <button type="button" class="map-btn ghost" id="map-reset">恢复初始</button>
+            <button type="button" class="map-btn ghost" id="map-calib-toggle">比例尺设置</button>
           </div>
         </div>
         <p class="map-hint">
-          ① 标定比例尺 → ②「设爆点」点地图 → ③ 需要时再手动点「设我的位置」标点。
-          两点间距会<strong>同步</strong>上方目标距离与「同爆点多方案」表。默认只显示站立静止圈，可叠加蹲姿/跳投。
+          默认<strong>航天基地</strong>；可切换其它地图（比例尺按图分别保存）。
+          日常：选方案 →「设爆点」→「设我的位置」；两点间距同步上方距离与多方案表。
         </p>
+        <div class="map-profiles" id="map-profiles"></div>
+        <div class="map-calib-panel" id="map-calib-panel" hidden>
+          <p class="map-calib-title">比例尺标定（少用 · 首次或换图时）</p>
+          <div class="map-calib-row">
+            <label class="map-scale-field">
+              已知距离 (m)
+              <input type="number" id="map-scale-m" min="1" max="500" step="0.1" value="50" />
+            </label>
+            <button type="button" class="map-btn" id="map-calib">在图上点两点</button>
+            <button type="button" class="map-btn" id="map-calib-save" disabled>确认并保存</button>
+            <input type="text" id="map-calib-name" class="map-calib-name" maxlength="16" placeholder="方案名，如：我的方案" />
+          </div>
+          <p class="map-calib-note" id="map-calib-note">点「在图上点两点」后依次点线段两端，输入真实米数完成草稿；再「确认并保存」写入方案按钮。</p>
+        </div>
         <div class="map-layers" id="map-layers"></div>
         <p class="map-status" id="map-status"></p>
         <div class="map-stage">
@@ -342,10 +367,62 @@ function buildApp(): void {
     mapBoard?.destroy()
     mapBoard = mountMapBoard(mapRoot, {
       onThrowDistance: (m) => applyMapThrowDistance(m),
+      onMapChange: (id) => syncMapSwitchLabel(id),
     })
     mapBoard.setDeltaH(state.deltaH)
+    wireMapSwitcher()
+    syncMapSwitchLabel(mapBoard.getMapId())
   }
   render()
+}
+
+function syncMapSwitchLabel(mapId: string): void {
+  const label = document.querySelector('#map-switch-label')
+  if (label) label.textContent = getMap(mapId).name
+  document.querySelectorAll<HTMLButtonElement>('.map-switch-item').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.map === mapId)
+  })
+}
+
+function wireMapSwitcher(): void {
+  const root = document.querySelector('#map-switcher')
+  const btn = document.querySelector<HTMLButtonElement>('#map-switch-btn')
+  const menu = document.querySelector<HTMLElement>('#map-switch-menu')
+  const list = document.querySelector('#map-switch-list')
+  if (!root || !btn || !menu || !list) return
+
+  list.innerHTML = MAPS.map(
+    (m) =>
+      `<button type="button" class="map-switch-item" data-map="${m.id}">${m.name}</button>`,
+  ).join('')
+
+  const close = () => {
+    menu.hidden = true
+    btn.setAttribute('aria-expanded', 'false')
+  }
+  const open = () => {
+    menu.hidden = false
+    btn.setAttribute('aria-expanded', 'true')
+    syncMapSwitchLabel(mapBoard?.getMapId() ?? loadActiveMapId())
+  }
+
+  btn.onclick = (e) => {
+    e.stopPropagation()
+    if (menu.hidden) open()
+    else close()
+  }
+  list.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest(
+      '[data-map]',
+    ) as HTMLElement | null
+    if (!t?.dataset.map) return
+    mapBoard?.setMap(t.dataset.map)
+    syncMapSwitchLabel(t.dataset.map)
+    close()
+  })
+  document.addEventListener('click', (e) => {
+    if (!root.contains(e.target as Node)) close()
+  })
 }
 
 function hideTipPopover(): void {

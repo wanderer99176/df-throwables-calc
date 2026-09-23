@@ -1,67 +1,62 @@
 /**
- * 俯视图：爆点中心 + 我的位置 + 多层最大射程圈。
- * 标定比例尺后，两点间距同步到上方「目标距离 / 同爆点多方案」。
+ * 俯视图：爆点 + 我的位置 + 射程圈。
+ * 支持多地图切换；比例尺按地图分别保存。
  */
 
 import { MAP_RING_LAYERS, maxRangeForAction, type MapRingLayer } from './mapRings'
+import {
+  formatPxPerM,
+  getActiveProfile,
+  listCalibProfiles,
+  saveUserProfile,
+  setActiveProfile,
+  type MapCalibProfile,
+} from './mapCalib'
+import {
+  DEFAULT_MAP_ID,
+  getMap,
+  loadActiveMapId,
+  saveActiveMapId,
+} from './maps'
 
-const MAP_ASSET_REV = 2
-const MAP_REV1_TO_REV2_SHRINK = 0.9
-
-const LS_SCALE = `df-map-meters-per-px-v${MAP_ASSET_REV}`
-const LS_CENTER = `df-map-center-v${MAP_ASSET_REV}`
-const LS_SELF = `df-map-self-v${MAP_ASSET_REV}`
-const LS_SCALE_LEGACY = 'df-map-meters-per-px'
-const LS_CENTER_LEGACY = 'df-map-center'
+const MARKER_REV = 3
 
 type PlaceMode = 'blast' | 'self'
 type CalibPhase = 'idle' | 'a' | 'b'
 type Pt = { x: number; y: number }
 
+function markerKeys(mapId: string) {
+  return {
+    center: `df-map-center-v${MARKER_REV}-${mapId}`,
+    self: `df-map-self-v${MARKER_REV}-${mapId}`,
+  }
+}
+
 export interface MapBoardHandle {
   setDeltaH: (dh: number) => void
+  setMap: (mapId: string) => void
+  getMapId: () => string
   redraw: () => void
   reset: () => void
   destroy: () => void
 }
 
 export interface MapBoardOptions {
-  /** 爆点↔我所在位置 的水平距离（米）；清除时为 null */
   onThrowDistance?: (distanceM: number | null) => void
+  onMapChange?: (mapId: string) => void
 }
 
 interface BoardState {
-  metersPerPx: number | null
+  mapId: string
+  metersPerPx: number
+  activeProfileId: string
+  draftMetersPerPx: number | null
+  draftRefMeters: number | null
   center: Pt | null
   self: Pt | null
   activeLayers: Set<string>
   deltaH: number
   placeMode: PlaceMode
-}
-
-function loadScale(): number | null {
-  const raw = localStorage.getItem(LS_SCALE)
-  if (raw) {
-    const n = Number(raw)
-    if (Number.isFinite(n) && n > 0) return n
-  }
-  const legacy = localStorage.getItem(LS_SCALE_LEGACY)
-  if (legacy) {
-    const old = Number(legacy)
-    if (Number.isFinite(old) && old > 0) {
-      const migrated = old / MAP_REV1_TO_REV2_SHRINK
-      localStorage.setItem(LS_SCALE, String(migrated))
-      localStorage.removeItem(LS_SCALE_LEGACY)
-      localStorage.removeItem(LS_CENTER_LEGACY)
-      return migrated
-    }
-  }
-  return null
-}
-
-function saveScale(v: number | null): void {
-  if (v == null) localStorage.removeItem(LS_SCALE)
-  else localStorage.setItem(LS_SCALE, String(v))
 }
 
 function loadPt(key: string): Pt | null {
@@ -92,7 +87,13 @@ export function mountMapBoard(
   const canvas = root.querySelector<HTMLCanvasElement>('#map-canvas')
   const statusEl = root.querySelector<HTMLElement>('#map-status')
   const layerBox = root.querySelector<HTMLElement>('#map-layers')
+  const profileBox = root.querySelector<HTMLElement>('#map-profiles')
+  const calibPanel = root.querySelector<HTMLElement>('#map-calib-panel')
+  const calibNote = root.querySelector<HTMLElement>('#map-calib-note')
+  const btnCalibToggle = root.querySelector<HTMLButtonElement>('#map-calib-toggle')
   const btnCalib = root.querySelector<HTMLButtonElement>('#map-calib')
+  const btnCalibSave = root.querySelector<HTMLButtonElement>('#map-calib-save')
+  const calibNameInput = root.querySelector<HTMLInputElement>('#map-calib-name')
   const btnClear = root.querySelector<HTMLButtonElement>('#map-clear')
   const btnReset = root.querySelector<HTMLButtonElement>('#map-reset')
   const btnModeBlast = root.querySelector<HTMLButtonElement>('#map-mode-blast')
@@ -102,19 +103,32 @@ export function mountMapBoard(
   if (!canvas || !statusEl || !layerBox) {
     return {
       setDeltaH: () => {},
+      setMap: () => {},
+      getMapId: () => DEFAULT_MAP_ID,
       redraw: () => {},
       reset: () => {},
       destroy: () => {},
     }
   }
 
+  const bootMapId = loadActiveMapId()
+  const bootMap = getMap(bootMapId)
   const img = new Image()
-  img.src = '/maps/dam-blueprint.png'
+  img.src = bootMap.src
+
+  listCalibProfiles(bootMapId)
+  const initial = getActiveProfile(bootMapId)
+  setActiveProfile(bootMapId, initial.id)
+  const mk0 = markerKeys(bootMapId)
 
   const state: BoardState = {
-    metersPerPx: loadScale(),
-    center: loadPt(LS_CENTER),
-    self: loadPt(LS_SELF),
+    mapId: bootMapId,
+    metersPerPx: initial.metersPerPx,
+    activeProfileId: initial.id,
+    draftMetersPerPx: null,
+    draftRefMeters: null,
+    center: loadPt(mk0.center),
+    self: loadPt(mk0.self),
     activeLayers: new Set(
       MAP_RING_LAYERS.filter((l) => l.defaultOn).map((l) => l.id),
     ),
@@ -126,14 +140,12 @@ export function mountMapBoard(
   let calibA: Pt | null = null
   let destroyed = false
 
+  const effectiveScale = (): number =>
+    state.draftMetersPerPx ?? state.metersPerPx
+
   const emitDistance = (): void => {
-    if (
-      state.center &&
-      state.self &&
-      state.metersPerPx != null &&
-      Number.isFinite(state.metersPerPx)
-    ) {
-      opts.onThrowDistance?.(distM(state.center, state.self, state.metersPerPx))
+    if (state.center && state.self) {
+      opts.onThrowDistance?.(distM(state.center, state.self, effectiveScale()))
     } else {
       opts.onThrowDistance?.(null)
     }
@@ -154,6 +166,35 @@ export function mountMapBoard(
     }
   }
 
+  const renderProfiles = (): void => {
+    if (!profileBox) return
+    const list = listCalibProfiles(state.mapId)
+    profileBox.innerHTML = `<span class="map-profiles-label">比例尺方案</span>${list
+      .map((p) => {
+        const active = p.id === state.activeProfileId && state.draftMetersPerPx == null
+        return `<button type="button" class="map-profile-btn${active ? ' active' : ''}" data-profile="${p.id}" title="${formatPxPerM(p.metersPerPx)}">
+          ${p.name}<em>${formatPxPerM(p.metersPerPx)}</em>
+        </button>`
+      })
+      .join('')}`
+  }
+
+  const applyProfile = (p: MapCalibProfile): void => {
+    setActiveProfile(state.mapId, p.id)
+    state.activeProfileId = p.id
+    state.metersPerPx = p.metersPerPx
+    state.draftMetersPerPx = null
+    state.draftRefMeters = null
+    if (btnCalibSave) btnCalibSave.disabled = true
+    if (calibNote)
+      calibNote.textContent =
+        '已应用方案。若需重标：点「在图上点两点」→ 确认并保存。'
+    renderProfiles()
+    emitDistance()
+    updateStatus()
+    draw()
+  }
+
   layerBox.innerHTML = MAP_RING_LAYERS.map((layer) => {
     const checked = state.activeLayers.has(layer.id) ? 'checked' : ''
     const { rangeM } = maxRangeForAction(layer.actionId, state.deltaH)
@@ -170,8 +211,7 @@ export function mountMapBoard(
         .querySelector(`input[data-layer="${layer.id}"]`)
         ?.parentElement?.querySelector('em')
       if (!em) continue
-      const { rangeM } = maxRangeForAction(layer.actionId, state.deltaH)
-      em.textContent = `${rangeM.toFixed(0)}m`
+      em.textContent = `${maxRangeForAction(layer.actionId, state.deltaH).rangeM.toFixed(0)}m`
     }
   }
 
@@ -185,40 +225,36 @@ export function mountMapBoard(
       return
     }
     if (calib === 'b') {
-      setStatus('标定中：再点另一端，然后输入真实米数')
+      setStatus('标定中：再点另一端')
       return
     }
-    if (state.metersPerPx == null) {
-      setStatus('请先标定比例尺（两点 + 真实米数），圈与「我的位置」距离才会正确')
-      return
-    }
+    const scaleTxt = formatPxPerM(effectiveScale())
+    const draft = state.draftMetersPerPx != null ? ' · 草稿未保存' : ''
+    const prof =
+      listCalibProfiles(state.mapId).find((p) => p.id === state.activeProfileId)
+        ?.name ?? '方案'
+    const mapName = getMap(state.mapId).name
     if (!state.center) {
       setStatus(
-        `比例尺 ${(1 / state.metersPerPx).toFixed(2)} px/m · 当前模式：设爆点（点击地图）`,
+        `【${mapName}】比例尺「${prof}」${scaleTxt}${draft} · 当前：设爆点（点地图）`,
       )
       return
     }
     if (state.placeMode === 'blast') {
       setStatus(
-        state.self
-          ? `当前模式：设爆点 · 点击可改爆点（会清空「我」）· 已有测距可切回「设我的位置」微调`
-          : `当前模式：设爆点 · 点击地图设置/修改爆点；测距请手动点「设我的位置」`,
+        `【${mapName}】比例尺「${prof}」${scaleTxt}${draft} · 当前：设爆点 · 点击可改爆点`,
       )
       return
     }
     if (!state.self) {
-      setStatus('当前模式：设我的位置 · 请在圈内点击你的站位，将同步上方距离与多方案表')
+      setStatus(
+        `【${mapName}】比例尺「${prof}」${scaleTxt}${draft} · 当前：设我的位置 · 请在圈内点击`,
+      )
       return
     }
-    const d = distM(state.center, state.self, state.metersPerPx)
-    const parts = MAP_RING_LAYERS.filter((l) => state.activeLayers.has(l.id)).map(
-      (l) => {
-        const { rangeM } = maxRangeForAction(l.actionId, state.deltaH)
-        return `${l.label}≤${rangeM.toFixed(0)}m`
-      },
-    )
+    const d = distM(state.center, state.self, effectiveScale())
     setStatus(
-      `爆点↔我 ${d.toFixed(1)}m · 已同步上方计算器 · ${parts.join(' / ')}`,
+      `【${mapName}】比例尺「${prof}」${scaleTxt}${draft} · 爆点↔我 ${d.toFixed(1)}m · 已同步上方`,
     )
   }
 
@@ -262,10 +298,9 @@ export function mountMapBoard(
     cy: number,
     layer: MapRingLayer,
   ): void => {
-    if (state.metersPerPx == null) return
     const { rangeM } = maxRangeForAction(layer.actionId, state.deltaH)
     const { scale } = layout()
-    const rPx = (rangeM / state.metersPerPx) * scale
+    const rPx = (rangeM / effectiveScale()) * scale
     ctx.beginPath()
     ctx.arc(cx, cy, rPx, 0, Math.PI * 2)
     ctx.fillStyle = layer.fill
@@ -299,7 +334,7 @@ export function mountMapBoard(
     }
     ctx.drawImage(img, originX, originY, drawW, drawH)
 
-    if (state.center && state.metersPerPx != null) {
+    if (state.center) {
       const c = imgToCanvas(state.center.x, state.center.y)
       const layers = MAP_RING_LAYERS.filter((l) => state.activeLayers.has(l.id))
       const sorted = [...layers].sort(
@@ -308,25 +343,27 @@ export function mountMapBoard(
           maxRangeForAction(a.actionId, state.deltaH).rangeM,
       )
       for (const layer of sorted) drawRing(ctx, c.x, c.y, layer)
+    }
 
-      if (state.self) {
-        const s = imgToCanvas(state.self.x, state.self.y)
-        ctx.setLineDash([6, 4])
-        ctx.strokeStyle = 'rgba(120, 200, 255, 0.75)'
-        ctx.lineWidth = 1.5
-        ctx.beginPath()
-        ctx.moveTo(s.x, s.y)
-        ctx.lineTo(c.x, c.y)
-        ctx.stroke()
-        ctx.setLineDash([])
-        const midX = (s.x + c.x) / 2
-        const midY = (s.y + c.y) / 2
-        const d = distM(state.center, state.self, state.metersPerPx)
-        ctx.fillStyle = 'rgba(160, 220, 255, 0.95)'
-        ctx.font = '600 12px Consolas, monospace'
-        ctx.fillText(`${d.toFixed(1)}m`, midX + 6, midY - 4)
-      }
+    if (state.center && state.self) {
+      const c = imgToCanvas(state.center.x, state.center.y)
+      const s = imgToCanvas(state.self.x, state.self.y)
+      ctx.setLineDash([6, 4])
+      ctx.strokeStyle = 'rgba(120, 200, 255, 0.75)'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(s.x, s.y)
+      ctx.lineTo(c.x, c.y)
+      ctx.stroke()
+      ctx.setLineDash([])
+      const d = distM(state.center, state.self, effectiveScale())
+      ctx.fillStyle = 'rgba(160, 220, 255, 0.95)'
+      ctx.font = '600 12px Consolas, monospace'
+      ctx.fillText(`${d.toFixed(1)}m`, (s.x + c.x) / 2 + 6, (s.y + c.y) / 2 - 4)
+    }
 
+    if (state.center) {
+      const c = imgToCanvas(state.center.x, state.center.y)
       ctx.fillStyle = '#ff6b4a'
       ctx.beginPath()
       ctx.arc(c.x, c.y, 5, 0, Math.PI * 2)
@@ -388,15 +425,15 @@ export function mountMapBoard(
       setStatus('两点太近，请重新标定')
       calib = 'idle'
       calibA = null
-      if (btnCalib) btnCalib.textContent = '标定比例尺'
+      if (btnCalib) btnCalib.textContent = '在图上点两点'
       return
     }
     const hint = scaleInput?.value?.trim()
     let meters = hint ? Number(hint) : NaN
     if (!Number.isFinite(meters) || meters <= 0) {
       const typed = window.prompt(
-        `线段图上约 ${distPx.toFixed(0)} 像素。请输入这两点的真实距离（米）：`,
-        '50',
+        `线段图上约 ${distPx.toFixed(0)} 像素。请输入真实距离（米）：`,
+        scaleInput?.value || '50',
       )
       meters = typed ? Number(typed) : NaN
     }
@@ -404,16 +441,20 @@ export function mountMapBoard(
       setStatus('已取消标定')
       calib = 'idle'
       calibA = null
-      if (btnCalib) btnCalib.textContent = '标定比例尺'
+      if (btnCalib) btnCalib.textContent = '在图上点两点'
       draw()
       return
     }
-    state.metersPerPx = meters / distPx
-    saveScale(state.metersPerPx)
+    state.draftMetersPerPx = meters / distPx
+    state.draftRefMeters = meters
     calib = 'idle'
     calibA = null
-    if (btnCalib) btnCalib.textContent = '重新标定'
+    if (btnCalib) btnCalib.textContent = '在图上点两点'
+    if (btnCalibSave) btnCalibSave.disabled = false
     if (scaleInput) scaleInput.value = String(meters)
+    if (calibNote)
+      calibNote.textContent = `草稿 ${formatPxPerM(state.draftMetersPerPx)}（参考 ${meters}m）。请点「确认并保存」写入方案按钮，下次直接选用。`
+    renderProfiles()
     emitDistance()
     updateStatus()
     draw()
@@ -438,14 +479,13 @@ export function mountMapBoard(
 
     if (state.placeMode === 'self' && state.center) {
       state.self = pt
-      savePt(LS_SELF, pt)
+      savePt(markerKeys(state.mapId).self, pt)
       emitDistance()
     } else {
       state.center = pt
-      savePt(LS_CENTER, pt)
-      // 爆点变了则清空旧「我」避免错距；模式保持「设爆点」，不自动跳转
+      savePt(markerKeys(state.mapId).center, pt)
       state.self = null
-      savePt(LS_SELF, null)
+      savePt(markerKeys(state.mapId).self, null)
       emitDistance()
     }
     updateStatus()
@@ -456,8 +496,7 @@ export function mountMapBoard(
     if (calib !== 'idle') {
       calib = 'idle'
       calibA = null
-      if (btnCalib)
-        btnCalib.textContent = state.metersPerPx ? '重新标定' : '标定比例尺'
+      if (btnCalib) btnCalib.textContent = '在图上点两点'
       updateStatus()
       draw()
       return
@@ -469,11 +508,43 @@ export function mountMapBoard(
     draw()
   }
 
+  const onCalibSave = (): void => {
+    if (state.draftMetersPerPx == null) return
+    const name =
+      calibNameInput?.value?.trim() ||
+      listCalibProfiles(state.mapId).find((p) => !p.builtin)?.name ||
+      '我的方案'
+    const saved = saveUserProfile(state.mapId, {
+      name,
+      metersPerPx: state.draftMetersPerPx,
+      refMeters: state.draftRefMeters ?? undefined,
+    })
+    state.draftMetersPerPx = null
+    state.draftRefMeters = null
+    state.metersPerPx = saved.metersPerPx
+    state.activeProfileId = saved.id
+    if (btnCalibSave) btnCalibSave.disabled = true
+    if (calibNameInput) calibNameInput.value = saved.name
+    if (calibNote)
+      calibNote.textContent = `已保存「${saved.name}」${formatPxPerM(saved.metersPerPx)}。日常点方案按钮即可，无需再标定。`
+    if (calibPanel) calibPanel.hidden = true
+    renderProfiles()
+    emitDistance()
+    updateStatus()
+    draw()
+  }
+
+  const onCalibToggle = (): void => {
+    if (!calibPanel) return
+    calibPanel.hidden = !calibPanel.hidden
+  }
+
   const onClear = (): void => {
     state.center = null
     state.self = null
-    savePt(LS_CENTER, null)
-    savePt(LS_SELF, null)
+    const mk = markerKeys(state.mapId)
+    savePt(mk.center, null)
+    savePt(mk.self, null)
     state.placeMode = 'blast'
     syncModeButtons()
     emitDistance()
@@ -486,55 +557,111 @@ export function mountMapBoard(
     calibA = null
     state.center = null
     state.self = null
-    state.metersPerPx = null
+    state.draftMetersPerPx = null
+    state.draftRefMeters = null
     state.placeMode = 'blast'
     state.activeLayers = new Set(
       MAP_RING_LAYERS.filter((l) => l.defaultOn).map((l) => l.id),
     )
-    savePt(LS_CENTER, null)
-    savePt(LS_SELF, null)
-    saveScale(null)
-    if (scaleInput) scaleInput.value = ''
-    if (btnCalib) btnCalib.textContent = '标定比例尺'
+    const mk = markerKeys(state.mapId)
+    savePt(mk.center, null)
+    savePt(mk.self, null)
+    const p = getActiveProfile(state.mapId)
+    state.metersPerPx = p.metersPerPx
+    state.activeProfileId = p.id
+    if (btnCalib) btnCalib.textContent = '在图上点两点'
+    if (btnCalibSave) btnCalibSave.disabled = true
     syncLayerChecks()
     syncModeButtons()
+    renderProfiles()
     emitDistance()
     updateStatus()
     draw()
+  }
+
+  const switchMap = (mapId: string): void => {
+    if (mapId === state.mapId) return
+    const map = getMap(mapId)
+    // 先落盘当前图标点（已在每次点击时保存）
+    calib = 'idle'
+    calibA = null
+    state.draftMetersPerPx = null
+    state.draftRefMeters = null
+    state.mapId = map.id
+    saveActiveMapId(map.id)
+    const p = getActiveProfile(map.id)
+    setActiveProfile(map.id, p.id)
+    state.metersPerPx = p.metersPerPx
+    state.activeProfileId = p.id
+    const mk = markerKeys(map.id)
+    state.center = loadPt(mk.center)
+    state.self = loadPt(mk.self)
+    state.placeMode = 'blast'
+    if (btnCalib) btnCalib.textContent = '在图上点两点'
+    if (btnCalibSave) btnCalibSave.disabled = true
+    const afterLoad = () => {
+      syncModeButtons()
+      renderProfiles()
+      updateStatus()
+      draw()
+      emitDistance()
+      opts.onMapChange?.(map.id)
+    }
+    img.onload = afterLoad
+    img.src = map.src
+    if (img.complete) afterLoad()
+  }
+
+  const onModeBlast = (): void => {
+    state.placeMode = 'blast'
+    syncModeButtons()
+    updateStatus()
+  }
+  const onModeSelf = (): void => {
+    if (!state.center) return
+    state.placeMode = 'self'
+    syncModeButtons()
+    updateStatus()
+  }
+
+  const onProfileClick = (e: Event): void => {
+    const t = (e.target as HTMLElement).closest(
+      '[data-profile]',
+    ) as HTMLElement | null
+    if (!t) return
+    const id = t.getAttribute('data-profile')
+    if (!id) return
+    const p = listCalibProfiles(state.mapId).find((x) => x.id === id)
+    if (p) applyProfile(p)
   }
 
   const onResize = (): void => draw()
 
   layerBox.addEventListener('change', onLayerChange)
+  profileBox?.addEventListener('click', onProfileClick)
   canvas.addEventListener('click', onClick)
   btnCalib?.addEventListener('click', onCalibClick)
+  btnCalibSave?.addEventListener('click', onCalibSave)
+  btnCalibToggle?.addEventListener('click', onCalibToggle)
   btnClear?.addEventListener('click', onClear)
   btnReset?.addEventListener('click', reset)
-  btnModeBlast?.addEventListener('click', () => {
-    state.placeMode = 'blast'
-    syncModeButtons()
-    updateStatus()
-  })
-  btnModeSelf?.addEventListener('click', () => {
-    if (!state.center) return
-    state.placeMode = 'self'
-    syncModeButtons()
-    updateStatus()
-  })
+  btnModeBlast?.addEventListener('click', onModeBlast)
+  btnModeSelf?.addEventListener('click', onModeSelf)
   window.addEventListener('resize', onResize)
 
   const boot = (): void => {
-    if (btnCalib)
-      btnCalib.textContent = state.metersPerPx ? '重新标定' : '标定比例尺'
+    renderProfiles()
     syncModeButtons()
     updateStatus()
     draw()
-    // 若已有两点，启动时同步一次距离
     emitDistance()
   }
   img.onload = boot
   if (img.complete) boot()
-  else updateStatus()
+  else {
+    renderProfiles()
+    updateStatus()
+  }
 
   return {
     setDeltaH: (dh: number) => {
@@ -543,15 +670,22 @@ export function mountMapBoard(
       updateStatus()
       draw()
     },
+    setMap: switchMap,
+    getMapId: () => state.mapId,
     redraw: draw,
     reset,
     destroy: () => {
       destroyed = true
       layerBox.removeEventListener('change', onLayerChange)
+      profileBox?.removeEventListener('click', onProfileClick)
       canvas.removeEventListener('click', onClick)
       btnCalib?.removeEventListener('click', onCalibClick)
+      btnCalibSave?.removeEventListener('click', onCalibSave)
+      btnCalibToggle?.removeEventListener('click', onCalibToggle)
       btnClear?.removeEventListener('click', onClear)
       btnReset?.removeEventListener('click', reset)
+      btnModeBlast?.removeEventListener('click', onModeBlast)
+      btnModeSelf?.removeEventListener('click', onModeSelf)
       window.removeEventListener('resize', onResize)
     },
   }
