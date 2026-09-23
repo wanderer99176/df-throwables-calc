@@ -30,7 +30,7 @@ if not exist "node_modules\electron\dist\electron.exe" (
   )
 )
 
-echo [INFO] Building and launching overlay window...
+echo [INFO] Building and launching calculator...
 call npm run desktop
 if errorlevel 1 (
   echo [ERROR] Launch failed. Please copy the error text above.

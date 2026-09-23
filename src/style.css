@@ -1031,8 +1031,16 @@ body.desktop.angle-mask #app {
 }
 
 .mask-fov-bar .desk-btn {
-  padding: 2px 10px;
-  font-size: 12px;
+  padding: 4px 12px;
+  font-size: 13px;
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  background: rgba(47, 154, 85, 0.12);
+  cursor: pointer;
+}
+
+.mask-fov-bar .desk-btn:hover {
+  background: rgba(47, 154, 85, 0.22);
 }
 
 .mask-fov-bar label {

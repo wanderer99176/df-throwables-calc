@@ -416,7 +416,12 @@ function registerShortcuts() {
     else startMouseFollow()
   })
   globalShortcut.register('CommandOrControl+Shift+0', () => {
-    rulerWin?.webContents.send('desktop:pitch-zero')
+    if (!rulerWin || rulerWin.isDestroyed()) return
+    try {
+      rulerWin.webContents.send('desktop:pitch-zero')
+    } catch {
+      /* ignore */
+    }
   })
 }
 
@@ -428,7 +433,7 @@ if (gotLock) {
 
   app.whenReady().then(() => {
     buildAppMenu()
-    // 启动只开计算器；两种侧栏由顶栏 / 菜单 / 快捷键按需打开
+    // 启动只开计算器；两种侧栏由顶栏 / 快捷键按需打开
     createCalcWindow()
     registerShortcuts()
 
@@ -452,9 +457,6 @@ if (gotLock) {
     })
     ipcMain.on('desktop:close', () => {
       rulerWin?.close()
-    })
-    ipcMain.on('desktop:open-calc', () => {
-      createCalcWindow()
     })
     ipcMain.on('desktop:open-ruler', () => {
       createRulerWindow()

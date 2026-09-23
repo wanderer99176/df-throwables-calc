@@ -54,7 +54,7 @@ npm install
 
 | 命令 / 文件 | 说明 |
 | --- | --- |
-| `start-desktop.bat` 或 `npm run desktop` | 构建并启动（计算器 + 弹道尺 + 遮罩） |
+| `start-desktop.bat` 或 `npm run desktop` | 构建并启动（默认只开计算器） |
 | `start-browser.bat` 或 `npm run dev` | 浏览器完整计算器（Vite） |
 | `npm run desktop:dev` | Vite + Electron 联调 |
 | `npm run package` | 打 Windows 便携包 → `release/` |
