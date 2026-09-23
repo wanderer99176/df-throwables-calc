@@ -78,6 +78,14 @@ function syncCalcLayoutMode(): void {
   const portrait = window.innerHeight > window.innerWidth * 1.02
   document.body.classList.toggle('calc-portrait', portrait)
   document.body.classList.toggle('calc-landscape', !portrait)
+  // 竖屏收紧标尺高度后需重绘，否则 canvas 仍按旧高度
+  requestAnimationFrame(() => {
+    try {
+      render()
+    } catch {
+      /* boot 前 render 可能未就绪 */
+    }
+  })
 }
 
 if (isDesktop) {
@@ -184,31 +192,23 @@ function buildApp(): void {
           <h1>定点打击计算器</h1>
         </div>
         <div class="mask-fov-bar" id="mask-fov-bar" title="侧栏与仰角遮罩">
-          <div class="mask-fov-row">
-            <span class="mask-fov-label">侧栏</span>
-            <button type="button" class="desk-btn" id="btn-shell-ruler">弹道尺</button>
-            <button type="button" class="desk-btn" id="btn-shell-mask">仰角遮罩</button>
+          <span class="mask-fov-label">侧栏</span>
+          <button type="button" class="desk-btn" id="btn-shell-ruler">弹道尺</button>
+          <button type="button" class="desk-btn" id="btn-shell-mask">仰角遮罩</button>
+          <div class="seg seg-mini" id="mask-pos-seg" title="遮罩水平位置">
+            <button type="button" data-pos="0">左</button>
+            <button type="button" data-pos="25">偏左</button>
+            <button type="button" data-pos="50">中</button>
+            <button type="button" data-pos="75">偏右</button>
+            <button type="button" data-pos="100">右</button>
           </div>
-          <div class="mask-fov-row">
-            <span class="mask-fov-label">遮罩位置</span>
-            <div class="seg seg-mini" id="mask-pos-seg" title="遮罩水平位置">
-              <button type="button" data-pos="0">左</button>
-              <button type="button" data-pos="25">偏左</button>
-              <button type="button" data-pos="50">中</button>
-              <button type="button" data-pos="75">偏右</button>
-              <button type="button" data-pos="100">右</button>
-            </div>
-            <label>位置% <input type="number" id="mask-xpos" min="0" max="100" step="1" /></label>
-          </div>
-          <div class="mask-fov-row">
-            <span class="mask-fov-label">显示</span>
-            <label>浓度 <input type="range" id="mask-opacity" min="0" max="100" step="1" /></label>
-            <strong id="mask-opacity-val">55</strong>
-            <label>FOV <input type="number" id="mask-hfov" min="60" max="120" step="1" /></label>
-            <div class="seg seg-mini" id="mask-aspect-seg">
-              <button type="button" data-aspect="1.777778">16:9</button>
-              <button type="button" data-aspect="0.5625">9:16</button>
-            </div>
+          <label>位置% <input type="number" id="mask-xpos" min="0" max="100" step="1" /></label>
+          <label>浓度 <input type="range" id="mask-opacity" min="0" max="100" step="1" /></label>
+          <strong id="mask-opacity-val">55</strong>
+          <label>FOV <input type="number" id="mask-hfov" min="60" max="120" step="1" /></label>
+          <div class="seg seg-mini" id="mask-aspect-seg">
+            <button type="button" data-aspect="1.777778">16:9</button>
+            <button type="button" data-aspect="0.5625">9:16</button>
           </div>
         </div>
         <div class="cascade">

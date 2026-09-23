@@ -1014,31 +1014,24 @@ body.desktop.angle-mask #app {
 
 .mask-fov-bar {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   margin: 0 0 8px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
   font-size: 13px;
   color: var(--muted);
 }
 
-.mask-fov-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-}
-
 .mask-fov-bar .mask-fov-label {
   color: var(--accent);
   font-weight: 650;
-  min-width: 4.5em;
 }
 
 .mask-fov-bar .desk-btn {
-  padding: 4px 12px;
+  padding: 2px 10px;
   font-size: 12px;
 }
 
@@ -1048,17 +1041,8 @@ body.desktop.angle-mask #app {
   gap: 6px;
 }
 
-.mask-fov-bar input[type='number'] {
-  width: 4.2em;
-  padding: 2px 6px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.35);
-  color: var(--ink);
-}
-
 .mask-fov-bar input[type='range'] {
-  width: 110px;
+  width: 88px;
   vertical-align: middle;
 }
 
@@ -1067,15 +1051,6 @@ body.desktop.angle-mask #app {
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   font-size: 12px;
-}
-
-body.calc-landscape .mask-fov-bar {
-  padding: 12px 14px;
-  gap: 10px;
-}
-
-body.calc-landscape .mask-fov-row {
-  gap: 10px 14px;
 }
 
 .seg-mini {
@@ -1961,25 +1936,50 @@ body.calc-portrait .map-bar {
 
 body.calc-portrait .viz-row {
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 8px;
+  min-height: 0;
+}
+
+body.calc-portrait.ruler-detail .viz-row {
+  /* 覆盖横屏「刻度详情」双栏，竖屏仍单列但压缩标尺高度 */
+  grid-template-columns: 1fr;
 }
 
 body.calc-portrait .traj-stage {
-  min-height: 220px;
+  min-height: 160px;
+  max-height: 220px;
 }
 
 body.calc-portrait .traj-stage canvas {
   width: 100%;
   height: auto;
-  max-height: 280px;
+  max-height: 220px;
+  min-height: 0;
 }
 
 body.calc-portrait .pitch-scale {
-  min-height: 360px;
+  min-height: 0;
+  gap: 4px;
 }
 
+body.calc-portrait .ruler-legend {
+  font-size: 11px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+/* 竖屏：限制标尺总高，刻度更紧凑，少翻页 */
 body.calc-portrait .ruler-wrap {
-  min-height: 320px;
+  flex: none;
+  height: min(42vh, 400px);
+  min-height: 240px;
+  max-height: 400px;
+}
+
+body.calc-portrait .ruler-wrap #ruler,
+body.calc-portrait #ruler {
+  min-height: 0 !important;
+  height: 100% !important;
 }
 
 body.calc-portrait .readout-grid.five {
