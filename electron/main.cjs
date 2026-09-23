@@ -7,16 +7,66 @@ const {
   screen,
 } = require('electron')
 const path = require('path')
-const { execFileSync } = require('child_process')
+const { execFileSync, execSync } = require('child_process')
 const rawMouse = require('./rawMouseWin.cjs')
 
 // 便携版每次解压路径不同，必须固定 userData，单实例锁才生效
 app.setPath('userData', path.join(app.getPath('appData'), 'df-throwables-calc'))
 
+const PACKAGED_EXE = 'DF投掷物尺子.exe'
+
+function sleepMs(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+  } catch {
+    const end = Date.now() + ms
+    while (Date.now() < end) {
+      /* spin */
+    }
+  }
+}
+
+/**
+ * 启动前先杀掉其它本应用进程，再抢锁。
+ * 这样「再双击」= 旧的全关，新的接上，不会越开越多。
+ */
+function killStalePackagedProcesses() {
+  if (process.platform !== 'win32') return
+  const self = process.pid
+  const parent = typeof process.ppid === 'number' ? process.ppid : -1
+  try {
+    execFileSync(
+      'taskkill',
+      ['/F', '/IM', PACKAGED_EXE, '/FI', `PID ne ${self}`],
+      { stdio: 'ignore', windowsHide: true },
+    )
+  } catch {
+    /* none */
+  }
+  // 其它 portable 宿主（绝不杀自己的父进程，否则子进程会被一起带走）
+  try {
+    execSync(
+      `powershell -NoProfile -Command "$skip=@(${self},${parent}); Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'DF-Throwables-Ruler*' -and ($skip -notcontains $_.ProcessId) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`,
+      { stdio: 'ignore', windowsHide: true },
+    )
+  } catch {
+    /* none */
+  }
+}
+
+// 先清旧进程，再申请单实例（新启动优先）
+if (app.isPackaged) {
+  killStalePackagedProcesses()
+  sleepMs(400)
+}
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
-  // 已有实例：本进程退出，由旧实例收到 second-instance 后自行重置
-  app.quit()
+  // 仍有残留：再杀一轮后退出，用户再点一次即可；避免双进程并存
+  if (app.isPackaged) {
+    killStalePackagedProcesses()
+  }
+  app.exit(0)
 }
 
 /** @type {Electron.BrowserWindow | null} */
@@ -35,23 +85,8 @@ let invertY = true
 const isDev = !app.isPackaged && process.env.DF_DESKTOP_DEV === '1'
 const DEV_URL = process.env.DF_DEV_URL || 'http://127.0.0.1:5173'
 const DIST_HTML = path.join(__dirname, '..', 'dist', 'index.html')
-const PACKAGED_EXE = 'DF投掷物尺子.exe'
 
-/** 清掉残留的旧 Electron 进程（锁失效时的孤儿），再开新会话 */
-function killStalePackagedProcesses() {
-  if (process.platform !== 'win32' || !app.isPackaged) return
-  try {
-    execFileSync(
-      'taskkill',
-      ['/F', '/IM', PACKAGED_EXE, '/FI', `PID ne ${process.pid}`],
-      { stdio: 'ignore', windowsHide: true },
-    )
-  } catch {
-    /* 没有其它实例时 taskkill 非 0，忽略 */
-  }
-}
-
-/** 关掉全部子窗，只留计算器（再次双击启动时走这里） */
+/** 关掉全部子窗，只留计算器（同进程内再次激活时） */
 function resetToCalcOnly() {
   stopMouseFollow()
   clickThrough = false
@@ -390,7 +425,6 @@ if (gotLock) {
   })
 
   app.whenReady().then(() => {
-    killStalePackagedProcesses()
     buildAppMenu()
     // 启动只开计算器；两种侧栏由顶栏 / 菜单 / 快捷键按需打开
     createCalcWindow()
