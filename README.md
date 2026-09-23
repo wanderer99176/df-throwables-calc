@@ -54,7 +54,7 @@ npm install
 
 | 命令 / 文件 | 说明 |
 | --- | --- |
-| `start-desktop.bat` 或 `npm run desktop` | 构建并启动（默认只开计算器） |
+| `start-desktop.bat` 或 `npm run desktop` | 构建并启动（计算器 + 弹道尺 + 遮罩） |
 | `start-browser.bat` 或 `npm run dev` | 浏览器完整计算器（Vite） |
 | `npm run desktop:dev` | Vite + Electron 联调 |
 | `npm run package` | 打 Windows 便携包 → `release/` |
@@ -67,11 +67,10 @@ npm install
 
 ## 仰角遮罩
 
-全程点穿 + 不可聚焦：不抢游戏鼠标与视角。贴在**屏幕右侧**。
+全程点穿。默认 **全角**（−30°～80° 均分，能看到 45°/70° 等）；可选 **光学**（按 FOV 透视，约 ±34°，用地平线读角）。
 
-- `vFOV = 2·atan(tan(hFOV/2) / (宽÷高))`；屏位 `y ∝ tan(α)`  
-- 16:9 + FOV100° 时单屏大约 **±34°**——不是软件少画了，而是准星在屏心时画面里就只能看到这么大仰角  
-- 需要 45° / 70° 等大角：用左侧**弹道尺**（绝对仰角 −30°～封顶）  
+计算器顶栏可切换「全角 / 光学」。大仰角投掷也可直接用左侧**弹道尺**。
+
 - `Ctrl+Shift+M` 显隐  
 
 ---
