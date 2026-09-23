@@ -30,13 +30,13 @@ npm run dev
 
 打开终端里提示的地址（默认 `http://127.0.0.1:5173`）。
 
-也可双击 `start-browser.bat` / `启动浏览器版.bat`。
+也可双击 `start-browser.bat`。
 
 ### 游戏侧边置顶尺（推荐对照用）
 
-**最简单**：双击 `start-desktop.bat`（或 `启动置顶尺子.bat`）。
+**最简单**：双击 `start-desktop.bat`。
 
-脚本为纯英文 ASCII，避免中文 Windows 下 UTF-8 批处理乱码。
+脚本为纯英文 ASCII，避免中文 Windows 下批处理编码乱码。
 
 或在终端：
 
@@ -49,8 +49,8 @@ npm run desktop
 
 | 命令 / 文件 | 说明 |
 | --- | --- |
-| `start-desktop.bat` / `启动置顶尺子.bat` | **双击启动置顶尺** |
-| `start-browser.bat` / `启动浏览器版.bat` | 双击启动浏览器开发版 |
+| `start-desktop.bat` | **双击启动置顶尺** |
+| `start-browser.bat` | 双击启动浏览器开发版 |
 | `package-portable.bat` | 修复 Electron 并打 Windows 便携包 → `release/` |
 | `npm run fix:electron` | 修复 Electron 二进制（路径含空格时常用） |
 | `npm run dev` | 浏览器开发预览 |
