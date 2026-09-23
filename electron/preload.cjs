@@ -8,8 +8,6 @@ contextBridge.exposeInMainWorld('dfDesktop', {
     ipcRenderer.send('desktop:set-passthrough-ignore', ignore),
   setSlim: (enabled) => ipcRenderer.send('desktop:set-slim', enabled),
   close: () => ipcRenderer.send('desktop:close'),
-  openCalc: () => ipcRenderer.send('desktop:open-calc'),
-  openMask: () => ipcRenderer.send('desktop:open-mask'),
   setFollow: (enabled) => ipcRenderer.send('desktop:set-follow', enabled),
   onClickThrough: (cb) => {
     ipcRenderer.on('desktop:click-through', (_e, v) => cb(v))

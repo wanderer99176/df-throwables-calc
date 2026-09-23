@@ -385,28 +385,8 @@ function setSlim(next) {
 }
 
 function buildAppMenu() {
-  const template = [
-    {
-      label: '窗口',
-      submenu: [
-        {
-          label: '打开侧边尺（弹道）',
-          click: () => createRulerWindow(),
-        },
-        {
-          label: '打开仰角遮罩（光学）',
-          click: () => createMaskWindow(),
-        },
-        {
-          label: '打开计算器',
-          click: () => createCalcWindow(),
-        },
-        { type: 'separator' },
-        { role: 'quit', label: '退出全部' },
-      ],
-    },
-  ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  // 侧栏开闭已在计算器顶栏，不再显示「窗口」菜单
+  Menu.setApplicationMenu(null)
 }
 
 function registerShortcuts() {
