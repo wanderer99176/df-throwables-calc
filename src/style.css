@@ -1516,6 +1516,13 @@ body.desktop.click-through .desktop-bar {
 
   .cascade-row {
     flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  .cascade-label {
+    flex: 0 0 auto;
+    padding-top: 0;
   }
 }
 
@@ -1917,7 +1924,16 @@ body.calc-portrait .mask-fov-bar {
 body.calc-portrait .cascade-row {
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+/* 竖排时勿再用 flex-basis:72px，否则标题会被撑出大块空白 */
+body.calc-portrait .cascade-label {
+  flex: 0 0 auto;
+  width: auto;
+  padding-top: 0;
+  line-height: 1.3;
 }
 
 body.calc-portrait .main-grid {

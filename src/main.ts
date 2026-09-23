@@ -208,7 +208,6 @@ function buildApp(): void {
           <label>FOV <input type="number" id="mask-hfov" min="60" max="120" step="1" /></label>
           <div class="seg seg-mini" id="mask-aspect-seg">
             <button type="button" data-aspect="1.777778">16:9</button>
-            <button type="button" data-aspect="0.5625">9:16</button>
           </div>
         </div>
         <div class="cascade">
@@ -866,7 +865,9 @@ function wireMaskFovBar(): void {
   }
   const readAspect = () => {
     const n = Number(localStorage.getItem(LS_ASPECT))
-    return Number.isFinite(n) && n > 0.3 ? n : 16 / 9
+    // 已移除 9:16 选项，旧值回落到 16:9
+    if (Number.isFinite(n) && n > 0.9 && n < 4) return n
+    return 16 / 9
   }
   const readX = () => {
     const n = Number(localStorage.getItem(LS_XPOS))

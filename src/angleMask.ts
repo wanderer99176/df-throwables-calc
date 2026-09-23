@@ -32,7 +32,6 @@ function loadConfig(): FovMaskConfig {
 
 function formatAspect(a: number): string {
   if (Math.abs(a - 16 / 9) < 0.02) return '16:9'
-  if (Math.abs(a - 9 / 16) < 0.02) return '9:16'
   if (Math.abs(a - 21 / 9) < 0.05) return '21:9'
   return a.toFixed(3)
 }
