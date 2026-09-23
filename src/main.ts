@@ -62,6 +62,7 @@ const bootParams = new URLSearchParams(location.search)
 /** 仅靠 URL 判定：计算器窗不带 desktop=1，与浏览器版同一套 UI */
 const isDesktop = bootParams.get('desktop') === '1'
 const bootSlim = bootParams.get('slim') !== '0'
+const isAngleMask = bootParams.get('mask') === '1'
 
 let syncLock = false
 /** 桌面侧边尺烟玻底色 alpha（仅底，刻度另控） */
@@ -168,6 +169,14 @@ function buildApp(): void {
       <header class="top-bar">
         <div class="brand">
           <h1>定点打击计算器</h1>
+        </div>
+        <div class="mask-fov-bar" id="mask-fov-bar" title="侧边仰角遮罩用：与游戏 FOV / 画幅一致">
+          <span class="mask-fov-label">遮罩</span>
+          <label>FOV <input type="number" id="mask-hfov" min="60" max="120" step="1" /></label>
+          <div class="seg seg-mini" id="mask-aspect-seg">
+            <button type="button" data-aspect="1.777778">16:9</button>
+            <button type="button" data-aspect="0.5625">9:16</button>
+          </div>
         </div>
         <div class="cascade">
           <div class="cascade-row">
@@ -394,6 +403,7 @@ function buildApp(): void {
   renderTactics()
   wireEvents()
   wireDesktop()
+  wireMaskFovBar()
   document.body.classList.toggle('show-detail-cols', state.showDetailCols)
   document.body.classList.toggle('ruler-detail', state.showRulerDetail)
   // 启动时对齐当前动作在默认距离上的解
@@ -614,9 +624,9 @@ const DESK_ACTION_ROWS: ActionModeId[][] = [
 ]
 
 const DESK_ACTION_SHORT: Record<ActionModeId, string> = {
-  stand_still: '站进',
-  crouch_still: '蹲进',
-  prone_still: '趴进',
+  stand_still: '站静',
+  crouch_still: '蹲静',
+  prone_still: '趴静',
   stand_move: '站走',
   crouch_move: '蹲走',
   prone_move: '趴走',
@@ -784,6 +794,44 @@ function renderOptionsTable(): void {
     .join('')
 
   ;(body as HTMLElement & { __opts?: ThrowOption[] }).__opts = opts
+}
+
+function wireMaskFovBar(): void {
+  const LS_HFOV = 'df-mask-hfov'
+  const LS_ASPECT = 'df-mask-aspect'
+  const hfovEl = document.querySelector<HTMLInputElement>('#mask-hfov')
+  if (!hfovEl) return
+
+  const readHfov = () => {
+    const n = Number(localStorage.getItem(LS_HFOV))
+    return Number.isFinite(n) && n > 10 ? n : 100
+  }
+  const readAspect = () => {
+    const n = Number(localStorage.getItem(LS_ASPECT))
+    return Number.isFinite(n) && n > 0.3 ? n : 16 / 9
+  }
+
+  const syncUi = () => {
+    hfovEl.value = String(Math.round(readHfov()))
+    const asp = readAspect()
+    document.querySelectorAll<HTMLButtonElement>('#mask-aspect-seg button').forEach((b) => {
+      const v = Number(b.dataset.aspect)
+      b.classList.toggle('active', Math.abs(v - asp) < 0.02)
+    })
+  }
+
+  hfovEl.addEventListener('change', () => {
+    const v = Math.min(120, Math.max(60, Math.round(Number(hfovEl.value) || 100)))
+    localStorage.setItem(LS_HFOV, String(v))
+    hfovEl.value = String(v)
+  })
+  document.querySelector('#mask-aspect-seg')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('button')
+    if (!btn?.dataset.aspect) return
+    localStorage.setItem(LS_ASPECT, btn.dataset.aspect)
+    syncUi()
+  })
+  syncUi()
 }
 
 function wireEvents(): void {
@@ -1631,4 +1679,8 @@ function positionFarTag(farDeg: number): void {
   positionSideTag('#far-tag', farDeg, '最远点')
 }
 
-buildApp()
+if (isAngleMask) {
+  void import('./angleMask').then((m) => m.mountAngleMask())
+} else {
+  buildApp()
+}
