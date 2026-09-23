@@ -1014,24 +1014,31 @@ body.desktop.angle-mask #app {
 
 .mask-fov-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
+  flex-direction: column;
+  gap: 8px;
   margin: 0 0 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
   font-size: 13px;
   color: var(--muted);
 }
 
+.mask-fov-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
 .mask-fov-bar .mask-fov-label {
   color: var(--accent);
   font-weight: 650;
+  min-width: 4.5em;
 }
 
 .mask-fov-bar .desk-btn {
-  padding: 2px 10px;
+  padding: 4px 12px;
   font-size: 12px;
 }
 
@@ -1041,8 +1048,17 @@ body.desktop.angle-mask #app {
   gap: 6px;
 }
 
+.mask-fov-bar input[type='number'] {
+  width: 4.2em;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--ink);
+}
+
 .mask-fov-bar input[type='range'] {
-  width: 88px;
+  width: 110px;
   vertical-align: middle;
 }
 
@@ -1051,6 +1067,15 @@ body.desktop.angle-mask #app {
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   font-size: 12px;
+}
+
+body.calc-landscape .mask-fov-bar {
+  padding: 12px 14px;
+  gap: 10px;
+}
+
+body.calc-landscape .mask-fov-row {
+  gap: 10px 14px;
 }
 
 .seg-mini {
