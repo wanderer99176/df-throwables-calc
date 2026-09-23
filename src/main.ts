@@ -53,7 +53,7 @@ const state: AppState = {
   pitch: 27,
   showDetailCols: false,
   showAllOptions: false,
-  showRulerDetail: false,
+  showRulerDetail: true,
   showSkillPanel: false,
   probeBounce: false,
 }
@@ -63,6 +63,7 @@ const bootParams = new URLSearchParams(location.search)
 const isDesktop = bootParams.get('desktop') === '1'
 const bootSlim = bootParams.get('slim') !== '0'
 const isAngleMask = bootParams.get('mask') === '1'
+const isPortraitCalc = bootParams.get('portrait') === '1'
 
 let syncLock = false
 /** 桌面侧边尺烟玻底色 alpha（仅底，刻度另控） */
@@ -78,6 +79,10 @@ if (isDesktop) {
   if (bootSlim) document.body.classList.add('slim')
   deskAimR = state.targetM
   deskAimDh = state.deltaH
+}
+
+if (isPortraitCalc && !isDesktop && !isAngleMask) {
+  document.body.classList.add('calc-portrait')
 }
 
 let applyPitch: (v: number) => void = (v) => {
@@ -264,10 +269,10 @@ function buildApp(): void {
               </div>
               <aside class="pitch-scale">
                 <label class="ruler-toggle tiny-check">
-                  <input type="checkbox" id="toggle-ruler-detail" />
+                  <input type="checkbox" id="toggle-ruler-detail" checked />
                   刻度详情
                 </label>
-                <p class="ruler-legend" id="ruler-legend" hidden>橙虚=封顶 · 蓝虚=最远 · 红实=0° · 红虚=目标仰角 · 淡红底=自伤区 · 点标签可对齐</p>
+                <p class="ruler-legend" id="ruler-legend">橙虚=封顶 · 蓝虚=最远 · 红实=0° · 红虚=目标仰角 · 淡红底=自伤区 · 点标签可对齐</p>
                 <div class="ruler-wrap">
                   <canvas id="ruler" width="200" height="480"></canvas>
                   <div class="pitch-tag" id="pitch-tag">0.0°</div>
@@ -411,6 +416,12 @@ function buildApp(): void {
   wireMaskFovBar()
   document.body.classList.toggle('show-detail-cols', state.showDetailCols)
   document.body.classList.toggle('ruler-detail', state.showRulerDetail)
+  {
+    const detailCb = document.querySelector<HTMLInputElement>('#toggle-ruler-detail')
+    if (detailCb) detailCb.checked = state.showRulerDetail
+    const legend = document.querySelector<HTMLElement>('#ruler-legend')
+    if (legend) legend.hidden = !state.showRulerDetail
+  }
   // 启动时对齐当前动作在默认距离上的解
   {
     const sol = solveAnglesForRange(aimLandForDeclare(state.targetM), params())

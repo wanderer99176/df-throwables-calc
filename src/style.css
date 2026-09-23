@@ -1031,16 +1031,8 @@ body.desktop.angle-mask #app {
 }
 
 .mask-fov-bar .desk-btn {
-  padding: 4px 12px;
-  font-size: 13px;
-  border: 1px solid var(--accent-dim);
-  color: var(--accent);
-  background: rgba(47, 154, 85, 0.12);
-  cursor: pointer;
-}
-
-.mask-fov-bar .desk-btn:hover {
-  background: rgba(47, 154, 85, 0.22);
+  padding: 2px 10px;
+  font-size: 12px;
 }
 
 .mask-fov-bar label {
@@ -1877,4 +1869,103 @@ body.desktop.click-through .desktop-bar {
     height: 56vh;
     min-height: 320px;
   }
+}
+
+/* —— 定点打击计算器：16:9 竖屏（9:16 窗口）—— */
+body.calc-portrait {
+  overflow-x: hidden;
+}
+
+body.calc-portrait .app-shell {
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px 20px;
+  gap: 10px;
+}
+
+body.calc-portrait .top-bar {
+  padding: 10px 12px;
+}
+
+body.calc-portrait .brand h1 {
+  font-size: 1.15rem;
+  margin: 0 0 8px;
+}
+
+body.calc-portrait .mask-fov-bar {
+  margin-bottom: 8px;
+  gap: 6px 8px;
+  padding: 6px 8px;
+}
+
+body.calc-portrait .cascade-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+body.calc-portrait .main-grid {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+body.calc-portrait .input-panel,
+body.calc-portrait .visual-panel,
+body.calc-portrait .options-bar,
+body.calc-portrait .preset-bar,
+body.calc-portrait .tactics-bar,
+body.calc-portrait .map-bar {
+  padding: 12px;
+}
+
+body.calc-portrait .viz-row {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+body.calc-portrait .traj-stage {
+  min-height: 220px;
+}
+
+body.calc-portrait .traj-stage canvas {
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+}
+
+body.calc-portrait .pitch-scale {
+  min-height: 360px;
+}
+
+body.calc-portrait .ruler-wrap {
+  min-height: 320px;
+}
+
+body.calc-portrait .readout-grid.five {
+  grid-template-columns: 1fr 1fr;
+}
+
+body.calc-portrait .preset-cards,
+body.calc-portrait .tactic-cards {
+  grid-template-columns: 1fr 1fr;
+}
+
+body.calc-portrait .options-bar {
+  overflow-x: auto;
+}
+
+body.calc-portrait .options-bar table {
+  font-size: 12px;
+}
+
+body.calc-portrait .map-stage {
+  height: 42vh;
+  min-height: 280px;
+  max-height: 420px;
+}
+
+body.calc-portrait .skill-bar {
+  margin-top: 8px;
+  padding-top: 8px;
 }

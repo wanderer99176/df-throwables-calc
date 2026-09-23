@@ -135,8 +135,14 @@ function placeMask(browserWindow) {
 function placeCalc(browserWindow) {
   const display = screen.getPrimaryDisplay()
   const { width: sw, height: sh, x: wx, y: wy } = display.workArea
-  const w = Math.min(1280, Math.max(960, sw - 80))
-  const h = Math.min(860, Math.max(720, sh - 60))
+  // 16:9 竖屏：宽:高 = 9:16
+  let h = Math.min(sh - 24, 1280)
+  let w = Math.round((h * 9) / 16)
+  if (w > sw - 24) {
+    w = Math.max(420, sw - 24)
+    h = Math.round((w * 16) / 9)
+    if (h > sh - 24) h = sh - 24
+  }
   browserWindow.setBounds({
     x: wx + Math.floor((sw - w) / 2),
     y: wy + Math.floor((sh - h) / 2),
@@ -319,10 +325,10 @@ function createCalcWindow() {
   }
 
   calcWin = new BrowserWindow({
-    width: 1280,
-    height: 860,
-    minWidth: 960,
-    minHeight: 640,
+    width: 720,
+    height: 1280,
+    minWidth: 420,
+    minHeight: 720,
     frame: true,
     transparent: false,
     backgroundColor: '#0a1018',
@@ -343,7 +349,8 @@ function createCalcWindow() {
     calcWin?.show()
   })
 
-  loadPage(calcWin, null)
+  // portrait=1 → 竖屏 9:16 排版
+  loadPage(calcWin, { portrait: '1' })
 
   calcWin.on('closed', () => {
     calcWin = null
@@ -416,12 +423,7 @@ function registerShortcuts() {
     else startMouseFollow()
   })
   globalShortcut.register('CommandOrControl+Shift+0', () => {
-    if (!rulerWin || rulerWin.isDestroyed()) return
-    try {
-      rulerWin.webContents.send('desktop:pitch-zero')
-    } catch {
-      /* ignore */
-    }
+    rulerWin?.webContents.send('desktop:pitch-zero')
   })
 }
 
@@ -433,7 +435,7 @@ if (gotLock) {
 
   app.whenReady().then(() => {
     buildAppMenu()
-    // 启动只开计算器；两种侧栏由顶栏 / 快捷键按需打开
+    // 启动只开计算器；两种侧栏由顶栏 / 菜单 / 快捷键按需打开
     createCalcWindow()
     registerShortcuts()
 
@@ -457,6 +459,9 @@ if (gotLock) {
     })
     ipcMain.on('desktop:close', () => {
       rulerWin?.close()
+    })
+    ipcMain.on('desktop:open-calc', () => {
+      createCalcWindow()
     })
     ipcMain.on('desktop:open-ruler', () => {
       createRulerWindow()
