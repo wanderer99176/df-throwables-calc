@@ -171,8 +171,10 @@ function buildApp(): void {
         <div class="brand">
           <h1>定点打击计算器</h1>
         </div>
-        <div class="mask-fov-bar" id="mask-fov-bar" title="侧边仰角遮罩用：与游戏 FOV / 画幅一致">
-          <span class="mask-fov-label">遮罩</span>
+        <div class="mask-fov-bar" id="mask-fov-bar" title="侧边栏与遮罩 FOV 设置">
+          <span class="mask-fov-label">侧栏</span>
+          <button type="button" class="desk-btn" id="btn-shell-ruler">弹道尺</button>
+          <button type="button" class="desk-btn" id="btn-shell-mask">仰角遮罩</button>
           <label>FOV <input type="number" id="mask-hfov" min="60" max="120" step="1" /></label>
           <div class="seg seg-mini" id="mask-aspect-seg">
             <button type="button" data-aspect="1.777778">16:9</button>
@@ -800,6 +802,21 @@ function renderOptionsTable(): void {
 function wireMaskFovBar(): void {
   const LS_HFOV = 'df-mask-hfov'
   const LS_ASPECT = 'df-mask-aspect'
+  const bar = document.querySelector('#mask-fov-bar')
+  if (!bar) return
+
+  // 浏览器里没有壳 API：隐藏「打开侧栏」按钮，保留 FOV 设置（给遮罩用）
+  const shell = window.dfApp
+  const btnRuler = document.querySelector<HTMLButtonElement>('#btn-shell-ruler')
+  const btnMask = document.querySelector<HTMLButtonElement>('#btn-shell-mask')
+  if (!shell) {
+    btnRuler?.remove()
+    btnMask?.remove()
+  } else {
+    btnRuler?.addEventListener('click', () => shell.openRuler())
+    btnMask?.addEventListener('click', () => shell.openMask())
+  }
+
   const hfovEl = document.querySelector<HTMLInputElement>('#mask-hfov')
   if (!hfovEl) return
 

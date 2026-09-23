@@ -1030,6 +1030,11 @@ body.desktop.angle-mask #app {
   font-weight: 650;
 }
 
+.mask-fov-bar .desk-btn {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
 .mask-fov-bar label {
   display: inline-flex;
   align-items: center;

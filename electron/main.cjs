@@ -7,16 +7,16 @@ const {
   screen,
 } = require('electron')
 const path = require('path')
+const { execFileSync } = require('child_process')
 const rawMouse = require('./rawMouseWin.cjs')
 
-// 禁止连点 / 多开：第二次启动只唤起已有窗口
+// 便携版每次解压路径不同，必须固定 userData，单实例锁才生效
+app.setPath('userData', path.join(app.getPath('appData'), 'df-throwables-calc'))
+
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
+  // 已有实例：本进程退出，由旧实例收到 second-instance 后自行重置
   app.quit()
-} else {
-  app.on('second-instance', () => {
-    focusExisting()
-  })
 }
 
 /** @type {Electron.BrowserWindow | null} */
@@ -35,17 +35,39 @@ let invertY = true
 const isDev = !app.isPackaged && process.env.DF_DESKTOP_DEV === '1'
 const DEV_URL = process.env.DF_DEV_URL || 'http://127.0.0.1:5173'
 const DIST_HTML = path.join(__dirname, '..', 'dist', 'index.html')
+const PACKAGED_EXE = 'DF投掷物尺子.exe'
 
-function focusExisting() {
-  for (const w of [calcWin, rulerWin, maskWin]) {
-    if (!w || w.isDestroyed()) continue
-    if (w.isMinimized()) w.restore()
-    if (w === maskWin) w.showInactive()
-    else {
-      w.show()
-      w.focus()
+/** 清掉残留的旧 Electron 进程（锁失效时的孤儿），再开新会话 */
+function killStalePackagedProcesses() {
+  if (process.platform !== 'win32' || !app.isPackaged) return
+  try {
+    execFileSync(
+      'taskkill',
+      ['/F', '/IM', PACKAGED_EXE, '/FI', `PID ne ${process.pid}`],
+      { stdio: 'ignore', windowsHide: true },
+    )
+  } catch {
+    /* 没有其它实例时 taskkill 非 0，忽略 */
+  }
+}
+
+/** 关掉全部子窗，只留计算器（再次双击启动时走这里） */
+function resetToCalcOnly() {
+  stopMouseFollow()
+  clickThrough = false
+  for (const w of [rulerWin, maskWin, calcWin]) {
+    if (w && !w.isDestroyed()) {
+      try {
+        w.destroy()
+      } catch {
+        /* ignore */
+      }
     }
   }
+  rulerWin = null
+  maskWin = null
+  calcWin = null
+  createCalcWindow()
 }
 
 function placeLeft(browserWindow) {
@@ -155,7 +177,7 @@ function createRulerWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // Raw Input / native handle 需要
+      sandbox: false,
     },
   })
 
@@ -193,10 +215,6 @@ function createRulerWindow() {
   return rulerWin
 }
 
-/**
- * 纯光学仰角遮罩：全程点穿 + 不可聚焦，不抢游戏鼠标/视角。
- * 受垂直 FOV 限制，约 ±vFOV/2（16:9·FOV100 ≈ ±34°）。
- */
 function createMaskWindow() {
   if (maskWin && !maskWin.isDestroyed()) {
     if (maskWin.isMinimized()) maskWin.restore()
@@ -263,6 +281,7 @@ function createCalcWindow() {
     show: false,
     title: '定点打击计算器',
     webPreferences: {
+      preload: path.join(__dirname, 'preload-shell.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -364,61 +383,65 @@ function registerShortcuts() {
   })
 }
 
-app.whenReady().then(() => {
-  if (!gotLock) return
-  buildAppMenu()
-  // 默认只开计算器 + 弹道尺；光学遮罩按需（菜单 / Ctrl+Shift+M / 尺上「遮罩」）
-  createCalcWindow()
-  createRulerWindow()
-  registerShortcuts()
+if (gotLock) {
+  app.on('second-instance', () => {
+    // 再次双击：关掉旧侧栏/旧计算器，只开一个新的计算器
+    resetToCalcOnly()
+  })
 
-  ipcMain.handle('desktop:get-state', () => ({
-    clickThrough,
-    slim,
-    isDev,
-    followMouse,
-    degPerCount,
-    invertY,
-    rawSupported: rawMouse.isSupported,
-  }))
-  ipcMain.on('desktop:set-click-through', (_e, enabled) => {
-    setClickThrough(!!enabled)
-  })
-  ipcMain.on('desktop:set-passthrough-ignore', (_e, ignore) => {
-    setPassthroughIgnore(!!ignore)
-  })
-  ipcMain.on('desktop:set-slim', (_e, enabled) => {
-    setSlim(!!enabled)
-  })
-  ipcMain.on('desktop:close', () => {
-    rulerWin?.close()
-  })
-  ipcMain.on('desktop:open-calc', () => {
+  app.whenReady().then(() => {
+    killStalePackagedProcesses()
+    buildAppMenu()
+    // 启动只开计算器；两种侧栏由顶栏 / 菜单 / 快捷键按需打开
     createCalcWindow()
-  })
-  ipcMain.on('desktop:open-mask', () => {
-    createMaskWindow()
-  })
-  ipcMain.on('desktop:set-follow', (_e, enabled) => {
-    if (enabled) startMouseFollow()
-    else stopMouseFollow()
-  })
+    registerShortcuts()
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    ipcMain.handle('desktop:get-state', () => ({
+      clickThrough,
+      slim,
+      isDev,
+      followMouse,
+      degPerCount,
+      invertY,
+      rawSupported: rawMouse.isSupported,
+    }))
+    ipcMain.on('desktop:set-click-through', (_e, enabled) => {
+      setClickThrough(!!enabled)
+    })
+    ipcMain.on('desktop:set-passthrough-ignore', (_e, ignore) => {
+      setPassthroughIgnore(!!ignore)
+    })
+    ipcMain.on('desktop:set-slim', (_e, enabled) => {
+      setSlim(!!enabled)
+    })
+    ipcMain.on('desktop:close', () => {
+      rulerWin?.close()
+    })
+    ipcMain.on('desktop:open-calc', () => {
       createCalcWindow()
+    })
+    ipcMain.on('desktop:open-ruler', () => {
       createRulerWindow()
-    }
+    })
+    ipcMain.on('desktop:open-mask', () => {
+      createMaskWindow()
+    })
+    ipcMain.on('desktop:set-follow', (_e, enabled) => {
+      if (enabled) startMouseFollow()
+      else stopMouseFollow()
+    })
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createCalcWindow()
+    })
   })
-})
 
-app.on('will-quit', () => {
-  if (!gotLock) return
-  stopMouseFollow()
-  globalShortcut.unregisterAll()
-})
+  app.on('will-quit', () => {
+    stopMouseFollow()
+    globalShortcut.unregisterAll()
+  })
 
-app.on('window-all-closed', () => {
-  if (!gotLock) return
-  if (process.platform !== 'darwin') app.quit()
-})
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+}

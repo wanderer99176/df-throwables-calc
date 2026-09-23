@@ -44,6 +44,11 @@ export interface DfDesktopApi {
 declare global {
   interface Window {
     dfDesktop?: DfDesktopApi
+    dfApp?: {
+      isShell: true
+      openRuler: () => void
+      openMask: () => void
+    }
   }
 }
 
