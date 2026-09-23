@@ -78,6 +78,8 @@ function effectFor(
         return '跳起避开前方低矮掩体/障碍物'
       case 'jump_move':
         return '极速冲跃平拉，飞行时间最短'
+      case 'jump_run':
+        return '跑跳极限平拉，飞行时间更短'
       case 'prone_move':
         return '趴爬微增初速微调落点'
       case 'prone_still':
@@ -106,6 +108,8 @@ function effectFor(
         return '站姿冲锋压制'
       case 'jump_move':
         return '前跳叠高度与移速，进一步延程'
+      case 'jump_run':
+        return '跑跳叠冲刺与高度，极限延程'
       case 'prone_move':
         return '趴爬极限约 79m，略短于 83'
       default:
@@ -117,7 +121,9 @@ function effectFor(
       case 'stand_move':
         return '站走 +3.8 m/s，极限约 88～90m'
       case 'jump_move':
-        return '移速+跳高三重叠加，可冲破 92～95m'
+        return '走跳 +3.8 m/s，可冲破 92～95m'
+      case 'jump_run':
+        return '跑跳 +5.5 m/s，极限延程更远'
       default:
         break
     }
@@ -209,7 +215,7 @@ export function solveAllActionOptions(
       !bounceLand &&
       sol.high &&
       Math.abs(sol.high.range - aimLand) <= tol &&
-      (mode.id === 'stand_move' || mode.id === 'jump_move')
+      (mode.id === 'stand_move' || mode.id === 'jump_move' || mode.id === 'jump_run')
     ) {
       const exists = out.some(
         (o) => o.actionId === mode.id && o.arc === 'high',
@@ -237,6 +243,7 @@ export function solveAllActionOptions(
       if (o.actionId === 'prone_still' && Math.abs(o.alpha - 45) < 0.3) return true
       if (o.actionId === 'jump_still' && o.arc === 'low') return true
       if (o.actionId === 'jump_move' && o.arc === 'low') return true
+      if (o.actionId === 'jump_run' && o.arc === 'low') return true
       return false
     }
     if (near75) {
@@ -248,12 +255,17 @@ export function solveAllActionOptions(
       return (
         (o.actionId === 'stand_move' ||
           o.actionId === 'crouch_move' ||
-          o.actionId === 'jump_move') &&
+          o.actionId === 'jump_move' ||
+          o.actionId === 'jump_run') &&
         o.arc === 'low'
       )
     }
     if (near90) {
-      return o.actionId === 'stand_move' || o.actionId === 'jump_move'
+      return (
+        o.actionId === 'stand_move' ||
+        o.actionId === 'jump_move' ||
+        o.actionId === 'jump_run'
+      )
     }
     return false
   }

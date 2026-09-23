@@ -9,9 +9,10 @@ export type ActionModeId =
   | 'prone_move'
   | 'jump_still'
   | 'jump_move'
+  | 'jump_run'
 
 export type StanceLabel = '站立' | '蹲姿' | '趴下'
-export type MotionLabel = '静止' | '向前移动' | '原地起跳' | '向前起跳'
+export type MotionLabel = '静止' | '向前移动' | '原地起跳' | '向前走跳' | '向前跑跳'
 
 export interface ActionModeDef {
   id: ActionModeId
@@ -32,6 +33,8 @@ export interface ActionModeDef {
 export const V_MOVE_PRONE = 1.15
 export const V_MOVE_CROUCH = 2.3
 export const V_MOVE_STAND = 3.8
+/** 站姿冲刺叠跳（约值，高于走跳） */
+export const V_MOVE_RUN = 5.5
 
 export const H0_PRONE = 0.3
 export const H0_CROUCH = 1.0
@@ -120,11 +123,22 @@ export const ACTION_MODES: ActionModeDef[] = [
     id: 'jump_move',
     group: 'jump',
     stance: '站立',
-    motion: '向前起跳',
-    title: '向前跳投',
-    detail: '前跳叠初速 · +3.8 m/s · h=2.4m',
+    motion: '向前走跳',
+    title: '向前走跳',
+    detail: '走跳叠初速 · +3.8 m/s · h=2.4m',
     h0: H0_JUMP,
     vMove: V_MOVE_STAND,
+    maxAlpha: 79.5,
+  },
+  {
+    id: 'jump_run',
+    group: 'jump',
+    stance: '站立',
+    motion: '向前跑跳',
+    title: '向前跑跳',
+    detail: '跑跳叠冲刺初速 · +5.5 m/s · h=2.4m',
+    h0: H0_JUMP,
+    vMove: V_MOVE_RUN,
     maxAlpha: 79.5,
   },
 ]

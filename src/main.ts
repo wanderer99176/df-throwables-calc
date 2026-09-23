@@ -66,13 +66,16 @@ const isDesktop =
 const bootSlim = bootParams.get('slim') !== '0'
 
 if (isDesktop) {
-  state.overlay = true
-  document.body.classList.add('desktop')
+  // 桌面默认：窄窗 + 仅标尺；点「面板」再展开计算器
+  state.overlay = false
+  state.showRulerDetail = true
+  document.body.classList.add('desktop', 'ruler-only')
   if (bootSlim) document.body.classList.add('slim')
-  document.body.classList.add('overlay')
 }
 
 let syncLock = false
+/** 桌面侧边尺烟玻底色 alpha（仅底，刻度另控） */
+let deskUiOpacity = 0.41
 let applyPitch: (v: number) => void = (v) => {
   state.pitch = clampPitch(v)
 }
@@ -131,17 +134,28 @@ function buildApp(): void {
   const app = document.querySelector<HTMLDivElement>('#app')!
   const desktopBar = isDesktop
     ? `<header class="desktop-bar">
-        <span class="drag-title">DF 尺子 · 置顶</span>
+        <div class="desktop-bar-head">
+          <span class="drag-title">DF尺子</span>
+          <button type="button" class="desk-btn danger" id="btn-close" title="关闭">×</button>
+        </div>
         <div class="desktop-actions">
-          <button type="button" class="desk-btn" id="btn-follow">跟随</button>
-          <button type="button" class="desk-btn" id="btn-zero">归零</button>
-          <button type="button" class="desk-btn" id="btn-clickthrough">穿透</button>
-          <button type="button" class="desk-btn" id="btn-slim">宽/窄</button>
-          <button type="button" class="desk-btn" id="btn-overlay-desk">面板</button>
-          <button type="button" class="desk-btn danger" id="btn-close">×</button>
+          <button type="button" class="desk-btn" id="btn-follow" title="Ctrl+Shift+F">跟随</button>
+          <button type="button" class="desk-btn" id="btn-zero" title="Ctrl+Shift+0">归零</button>
+          <button type="button" class="desk-btn" id="btn-clickthrough" title="Ctrl+Shift+X">穿透</button>
+          <button type="button" class="desk-btn" id="btn-opacity" title="调节透明度">透明度</button>
+          <button type="button" class="desk-btn" id="btn-minimal" title="只留刻度尺">极简</button>
         </div>
       </header>
-      <p class="desktop-hotkeys" id="desktop-status">F 跟随 · 0 归零 · X 穿透</p>`
+      <div class="desk-opacity-pop" id="desk-opacity-pop" hidden>
+        <div class="desk-opacity-head">
+          <span>透明度</span>
+          <strong id="desk-opacity-val">0</strong>
+        </div>
+        <input type="range" id="desk-opacity-range" min="-100" max="100" step="1" value="0" />
+        <p class="desk-opacity-hint">烟玻底色：-100 几乎无底 · 0 半透可见背后 · 100 实底</p>
+        <button type="button" class="desk-btn desk-opacity-save" id="btn-opacity-save">保存</button>
+      </div>
+      <button type="button" class="desk-exit-minimal" id="btn-exit-minimal" hidden title="退出极简">退出极简</button>`
     : ''
 
   app.innerHTML = `
@@ -235,13 +249,25 @@ function buildApp(): void {
                   <input type="checkbox" id="toggle-ruler-detail" />
                   刻度详情
                 </label>
-                <p class="ruler-legend" id="ruler-legend" hidden>橙虚=封顶 · 蓝虚=最远 · 红实=0° · 淡红底=自伤区 · 点标签可对齐</p>
+                <p class="ruler-legend" id="ruler-legend" hidden>橙虚=封顶 · 蓝虚=最远 · 红实=0° · 红虚=目标仰角 · 淡红底=自伤区 · 点标签可对齐</p>
                 <div class="ruler-wrap">
                   <canvas id="ruler" width="200" height="480"></canvas>
                   <div class="pitch-tag" id="pitch-tag">0.0°</div>
                   <button type="button" class="cap-tag" id="cap-tag" hidden title="点击对齐到封顶仰角">封顶</button>
                   <button type="button" class="far-tag" id="far-tag" hidden title="点击对齐到最远点仰角">最远点</button>
                 </div>
+                ${
+                  isDesktop
+                    ? `<div class="desktop-dock" id="desktop-dock">
+                  <div class="desk-alpha"><em>仰角 α</em><strong id="desk-alpha-v">--°</strong></div>
+                  <div class="desk-fields">
+                    <label class="desk-field">R<input type="number" id="desk-target" min="1" max="100" step="0.5" value="${state.targetM}" title="目标距离(m)" /></label>
+                    <label class="desk-field">Δh<input type="number" id="desk-dh" min="-30" max="40" step="0.5" value="${state.deltaH}" title="相对高度差(m)" /></label>
+                  </div>
+                  <div class="desk-actions" id="desk-actions"></div>
+                </div>`
+                    : ''
+                }
               </aside>
             </div>
             <div class="traj-hud-bottom" id="traj-hud-bottom"></div>
@@ -566,19 +592,51 @@ function renderCascade(): void {
     .join('')
 }
 
+const DESK_ACTION_ROWS: ActionModeId[][] = [
+  ['stand_still', 'crouch_still', 'prone_still'],
+  ['stand_move', 'crouch_move', 'prone_move'],
+  ['jump_still', 'jump_move', 'jump_run'],
+]
+
+const DESK_ACTION_SHORT: Record<ActionModeId, string> = {
+  stand_still: '站进',
+  crouch_still: '蹲进',
+  prone_still: '趴进',
+  stand_move: '站走',
+  crouch_move: '蹲走',
+  prone_move: '趴走',
+  jump_still: '站跳',
+  jump_move: '走跳',
+  jump_run: '跑跳',
+}
+
+function renderDeskActions(): void {
+  const box = document.querySelector('#desk-actions')
+  if (!box) return
+  box.innerHTML = DESK_ACTION_ROWS.map(
+    (row) =>
+      `<div class="desk-action-row">${row
+        .map((id) => {
+          const m = getActionMode(id)
+          return `<button type="button" class="desk-chip${id === state.actionId ? ' active' : ''}" data-action="${id}" title="${m.title}">${DESK_ACTION_SHORT[id]}</button>`
+        })
+        .join('')}</div>`,
+  ).join('')
+}
+
 function renderActionModes(): void {
   const box = document.querySelector('#action-groups')
-  if (!box) return
-  const groups: Array<'still' | 'move' | 'jump'> = ['still', 'move', 'jump']
-  box.innerHTML =
-    groups
-      .map((g) => {
-        const modes = ACTION_MODES.filter((m) => m.group === g)
-        const tip =
-          g === 'move'
-            ? ` <button type="button" class="tip-bang" data-tip="vmov" title="移速说明">!</button>`
-            : ''
-        return `<div class="action-group">
+  if (box) {
+    const groups: Array<'still' | 'move' | 'jump'> = ['still', 'move', 'jump']
+    box.innerHTML =
+      groups
+        .map((g) => {
+          const modes = ACTION_MODES.filter((m) => m.group === g)
+          const tip =
+            g === 'move'
+              ? ` <button type="button" class="tip-bang" data-tip="vmov" title="移速说明">!</button>`
+              : ''
+          return `<div class="action-group">
         <div class="action-group-head">
           <span class="tag">${GROUP_LABEL[g]}</span>${tip}
         </div>
@@ -591,12 +649,14 @@ function renderActionModes(): void {
             .join('')}
         </div>
       </div>`
-      })
-      .join('') +
-    `<label class="tiny-check probe-toggle" title="开启后按「拉栓即投」：落地后反弹 +3m / 0.3s，申报距离=落地+3；关闭则掐雷落地即炸">
+        })
+        .join('') +
+      `<label class="tiny-check probe-toggle" title="开启后按「拉栓即投」：落地后反弹 +3m / 0.3s，申报距离=落地+3；关闭则掐雷落地即炸">
       <input type="checkbox" id="toggle-probe" ${state.probeBounce ? 'checked' : ''} />
       落地弹地（+3m / 0.3s）
     </label>`
+  }
+  renderDeskActions()
 }
 
 function renderUniversal(): void {
@@ -642,6 +702,8 @@ function syncInputs(): void {
   set('#dh-range', state.deltaH)
   set('#pitch', state.pitch.toFixed(1))
   set('#pitch-range', state.pitch)
+  set('#desk-target', state.targetM)
+  set('#desk-dh', state.deltaH)
   document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((b) => {
     b.classList.toggle('active', b.dataset.action === state.actionId)
   })
@@ -821,9 +883,12 @@ function wireEvents(): void {
     const action = t.getAttribute('data-action') as ActionModeId | null
     if (action) {
       state.actionId = action
-      const sol = solveAnglesForRange(aimLandForDeclare(state.targetM), params())
-      const pick = sol.low ?? sol.high
-      if (pick) state.pitch = clampPitch(pick.alpha)
+      // 桌面侧边尺：只换姿态，用红虚线标目标仰角，不硬拽当前绿线
+      if (!isDesktop) {
+        const sol = solveAnglesForRange(aimLandForDeclare(state.targetM), params())
+        const pick = sol.low ?? sol.high
+        if (pick) state.pitch = clampPitch(pick.alpha)
+      }
       renderActionModes()
       syncInputs()
       render()
@@ -854,7 +919,7 @@ function wireEvents(): void {
       return
     }
     if (t.id === 'far-tag') {
-      syncPitch(findMaxRangeAngle(params()).alpha)
+      syncPitch(findMaxRangeAngle({ ...params(), deltaH: 0 }).alpha)
       return
     }
   })
@@ -862,6 +927,18 @@ function wireEvents(): void {
   root.addEventListener('input', (ev) => {
     const el = ev.target as HTMLInputElement
     if (!(el instanceof HTMLInputElement)) return
+    // 桌面侧边尺：只更新目标距离/高度，反解红虚线仰角，不改当前绿线/不拖最远点
+    if (el.id === 'desk-target') {
+      state.targetM = Math.max(0.1, parseFloat(el.value) || 0)
+      render()
+      return
+    }
+    if (el.id === 'desk-dh') {
+      state.deltaH = parseFloat(el.value) || 0
+      mapBoard?.setDeltaH(state.deltaH)
+      render()
+      return
+    }
     if (el.id === 'target' || el.id === 'target-range') syncTarget(parseFloat(el.value) || 0)
     else if (el.id === 'dh' || el.id === 'dh-range') {
       state.deltaH = parseFloat(el.value) || 0
@@ -908,7 +985,7 @@ function wireEvents(): void {
       let angle = ANGLE_MAX - (y / rect.height) * (ANGLE_MAX - ANGLE_MIN)
       if (snapSpecial) {
         const cap = maxAlphaFor(params())
-        const farA = findMaxRangeAngle(params()).alpha
+        const farA = findMaxRangeAngle({ ...params(), deltaH: 0 }).alpha
         const thresh = 12
         if (Math.abs(y - yOfAngle(cap, rect.height)) <= thresh) angle = cap
         else if (Math.abs(y - yOfAngle(farA, rect.height)) <= thresh) angle = farA
@@ -929,10 +1006,11 @@ function wireEvents(): void {
     })
   }
 
-  // 滚轮改仰角：仅当指针在轨迹图 / 右侧标尺上；空白处滚轮只滚动页面
+  // 滚轮改仰角：仅浏览器版，且指针在轨迹图 / 右侧标尺上；桌面侧边尺禁止滚轮（避免缩放/误改刻度）
   window.addEventListener(
     'wheel',
     (e) => {
+      if (isDesktop) return
       const t = e.target as HTMLElement
       const onPitchSurface = Boolean(
         t.closest('#traj, #ruler, .pitch-scale, .traj-stage'),
@@ -976,31 +1054,180 @@ function wireDesktop(): void {
   if (!isDesktop) return
   const api = window.dfDesktop
   let followOn = false
+  let clickThroughOn = false
+  let minimalOn = false
+
+  const OPACITY_KEY = 'df-desk-opacity-slider'
+  let savedOpacitySlider = 0
+
+  /**
+   * 滑块 -100～100 → 仅底色 alpha（烟玻效果，刻度保持清晰）
+   * -100 ≈ 无底（几乎只剩刻度痕迹）· 0 ≈ 参考图半透 · 100 ≈ 实底
+   */
+  const sliderToBgAlpha = (slider: number): number => {
+    const t = (Math.min(100, Math.max(-100, slider)) + 100) / 200
+    return 0.02 + 0.78 * t
+  }
+
+  /** 刻度/准线不透明度：0 及以上全清晰；往 -100 逐渐淡成痕迹 */
+  const sliderToMarkAlpha = (slider: number): number => {
+    const s = Math.min(100, Math.max(-100, slider))
+    if (s >= 0) return 1
+    return 0.12 + 0.88 * ((s + 100) / 100)
+  }
+
+  const readSavedSlider = (): number => {
+    const raw = Number(localStorage.getItem(OPACITY_KEY))
+    if (!Number.isFinite(raw)) return 0
+    return Math.min(100, Math.max(-100, raw))
+  }
+
+  const applyFadePreview = (slider: number) => {
+    const s = Math.min(100, Math.max(-100, Math.round(slider)))
+    deskUiOpacity = sliderToBgAlpha(s)
+    document.documentElement.style.setProperty('--desk-bg-alpha', String(deskUiOpacity))
+    document.documentElement.style.setProperty('--desk-mark-alpha', String(sliderToMarkAlpha(s)))
+    document.documentElement.style.removeProperty('--desk-fade')
+    const range = document.querySelector<HTMLInputElement>('#desk-opacity-range')
+    const val = document.querySelector('#desk-opacity-val')
+    if (range && range.value !== String(s)) range.value = String(s)
+    if (val) val.textContent = String(s)
+    render()
+  }
+
+  const commitOpacity = (slider: number) => {
+    const s = Math.min(100, Math.max(-100, Math.round(slider)))
+    savedOpacitySlider = s
+    localStorage.setItem(OPACITY_KEY, String(s))
+    applyFadePreview(s)
+    document.querySelector('#btn-opacity')?.classList.toggle('active', s !== 0)
+  }
+
+  const setOpacityPop = (open: boolean) => {
+    const pop = document.querySelector<HTMLElement>('#desk-opacity-pop')
+    if (!pop) return
+    if (open) {
+      applyFadePreview(savedOpacitySlider)
+      pop.hidden = false
+    } else {
+      // 未保存则恢复已保存值
+      applyFadePreview(savedOpacitySlider)
+      pop.hidden = true
+    }
+    document
+      .querySelector('#btn-opacity')
+      ?.classList.toggle('active', open || savedOpacitySlider !== 0)
+  }
+
+  const setMinimal = (on: boolean) => {
+    if (on) {
+      const wrap = document.querySelector<HTMLElement>('.ruler-wrap')
+      const h = wrap?.getBoundingClientRect().height
+      if (h && h > 40) {
+        document.documentElement.style.setProperty('--desk-ruler-h', `${Math.round(h)}px`)
+      }
+    }
+    minimalOn = on
+    document.body.classList.toggle('minimal-ruler', on)
+    document.querySelector('#btn-minimal')?.classList.toggle('active', on)
+    const exit = document.querySelector<HTMLButtonElement>('#btn-exit-minimal')
+    if (exit) exit.hidden = !on
+    setOpacityPop(false)
+    requestAnimationFrame(() => render())
+  }
 
   const syncSlim = (slim: boolean) => {
     document.body.classList.toggle('slim', slim)
   }
+
   const syncClickThrough = (on: boolean) => {
+    clickThroughOn = on
     document.body.classList.toggle('click-through', on)
+    document.querySelector('#btn-clickthrough')?.classList.toggle('active', on)
   }
 
+  const HIT =
+    '.desktop-bar, .desk-btn, .desk-opacity-pop, .desk-exit-minimal, .pitch-scale, #ruler, #pitch-tag, .cap-tag, .far-tag, .desktop-dock, .desk-chip, .desk-field'
+
+  document.addEventListener(
+    'mousemove',
+    (e) => {
+      if (!clickThroughOn) return
+      const overUi = Boolean((e.target as HTMLElement | null)?.closest?.(HIT))
+      api?.setPassthroughIgnore?.(!overUi)
+    },
+    { passive: true },
+  )
+
   document.querySelector('#btn-clickthrough')?.addEventListener('click', () => {
-    const next = !document.body.classList.contains('click-through')
+    const next = !clickThroughOn
     api?.setClickThrough(next)
     syncClickThrough(next)
-  })
-  document.querySelector('#btn-slim')?.addEventListener('click', () => {
-    api?.toggleSlim()
-    // 以 IPC 回传为准；本地先翻转作即时反馈
-    document.body.classList.toggle('slim')
-  })
-  document.querySelector('#btn-overlay-desk')?.addEventListener('click', () => {
-    state.overlay = !state.overlay
-    document.body.classList.toggle('overlay', state.overlay)
   })
   document.querySelector('#btn-close')?.addEventListener('click', () => api?.close())
   document.querySelector('#btn-follow')?.addEventListener('click', () => api?.setFollow(!followOn))
   document.querySelector('#btn-zero')?.addEventListener('click', () => applyPitch(0))
+  document.querySelector('#btn-opacity')?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    const pop = document.querySelector<HTMLElement>('#desk-opacity-pop')
+    setOpacityPop(Boolean(pop?.hidden))
+  })
+  document.querySelector('#btn-minimal')?.addEventListener('click', () => setMinimal(!minimalOn))
+  document.querySelector('#btn-exit-minimal')?.addEventListener('click', () => setMinimal(false))
+
+  document.querySelector('#desk-opacity-range')?.addEventListener('input', (e) => {
+    const el = e.target as HTMLInputElement
+    applyFadePreview(parseFloat(el.value) || 0)
+  })
+  document.querySelector('#btn-opacity-save')?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    const range = document.querySelector<HTMLInputElement>('#desk-opacity-range')
+    commitOpacity(parseFloat(range?.value || '0') || 0)
+    const pop = document.querySelector<HTMLElement>('#desk-opacity-pop')
+    if (pop) pop.hidden = true
+    document
+      .querySelector('#btn-opacity')
+      ?.classList.toggle('active', savedOpacitySlider !== 0)
+  })
+
+  document.addEventListener('click', (e) => {
+    const t = e.target as HTMLElement
+    if (t.closest('#btn-opacity') || t.closest('#desk-opacity-pop')) return
+    setOpacityPop(false)
+  })
+
+  // 侧边尺：禁止滚轮缩放；数字框 / 透明度滑块聚焦时放行
+  document.addEventListener(
+    'wheel',
+    (e) => {
+      const ae = document.activeElement
+      const onDeskNum =
+        ae instanceof HTMLInputElement &&
+        (ae.type === 'number' || ae.id === 'desk-opacity-range') &&
+        Boolean(ae.closest('.desktop-dock, .desk-opacity-pop'))
+      if (onDeskNum) return
+      if ((e.target as HTMLElement | null)?.closest?.('#desk-opacity-range')) return
+      e.preventDefault()
+    },
+    { passive: false, capture: true },
+  )
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key === 'Escape') {
+        if (minimalOn) {
+          setMinimal(false)
+          return
+        }
+        setOpacityPop(false)
+      }
+      if (!(e.ctrlKey || e.metaKey)) return
+      if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_' || e.key === '0') {
+        e.preventDefault()
+      }
+    },
+    { capture: true },
+  )
 
   api?.onSlim((slim) => syncSlim(!!slim))
   api?.onClickThrough((v) => syncClickThrough(!!v))
@@ -1013,10 +1240,20 @@ function wireDesktop(): void {
     if (followOn) applyPitch(state.pitch + ev.dPitch)
   })
 
-  // 启动时与主进程状态对齐
+  state.showRulerDetail = true
+  document.body.classList.add('ruler-only', 'slim')
+  document.body.classList.remove('panel-open', 'minimal-ruler')
+  document.body.classList.toggle('ruler-detail', true)
+  api?.setSlim?.(true)
+  savedOpacitySlider = readSavedSlider()
+  applyFadePreview(savedOpacitySlider)
+  document.querySelector('#btn-opacity')?.classList.toggle('active', savedOpacitySlider !== 0)
+  // 默认开启跟随
+  api?.setFollow?.(true)
+
   void api?.getState?.().then((s) => {
     if (!s) return
-    syncSlim(!!s.slim)
+    syncSlim(true)
     syncClickThrough(!!s.clickThrough)
     followOn = !!s.followMouse
     document.querySelector('#btn-follow')?.classList.toggle('active', followOn)
@@ -1042,6 +1279,7 @@ function render(): void {
     const alphaShow = pick ? pick.alpha : state.pitch
     setText('#action-v', mode.title)
     setText('#alpha-v', `${safe(alphaShow, 1)}°`)
+    setText('#desk-alpha-v', pick ? `${safe(pick.alpha, 1)}°` : '--°')
     setText('#range-v', `${safe(cur.range, 1)}m`)
     setText('#time-v', `${safe(cur.flightTime, 2)}s`)
     if (canApplyProbe(cur, th)) {
@@ -1128,8 +1366,24 @@ function drawRuler(cur: BallisticResult, recommend: BallisticResult | null): voi
   canvas.height = Math.floor(H * dpr)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, W, H)
-  ctx.fillStyle = 'rgba(8,14,22,0.72)'
-  ctx.fillRect(0, 0, W, H)
+
+  // 烟玻底色（可透视背后）；刻度另用 markAlpha，默认全清晰
+  const bgA = isDesktop ? deskUiOpacity : 0.72
+  const markA = isDesktop
+    ? Math.min(
+        1,
+        Math.max(
+          0.08,
+          parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue('--desk-mark-alpha'),
+          ) || 1,
+        ),
+      )
+    : 1
+  if (bgA > 0.001) {
+    ctx.fillStyle = `rgba(0, 0, 0, ${bgA})`
+    ctx.fillRect(0, 0, W, H)
+  }
 
   const axisX = 26
   const angleToY = (a: number) => ((ANGLE_MAX - a) / (ANGLE_MAX - ANGLE_MIN)) * H
@@ -1138,7 +1392,8 @@ function drawRuler(cur: BallisticResult, recommend: BallisticResult | null): voi
   const detail = state.showRulerDetail
   const th = currentThrowable()
   const blast = th.blastRadiusM
-  const far = findMaxRangeAngle(p)
+  // 最远点按平地参考（Δh=0），不随目标高度差挪动
+  const far = findMaxRangeAngle({ ...p, deltaH: 0 })
 
   // —— 自伤区底色（落点距离 < 爆炸半径的仰角段）——
   if (blast != null && blast > 0) {
@@ -1149,7 +1404,7 @@ function drawRuler(cur: BallisticResult, recommend: BallisticResult | null): voi
       const y1 = angleToY(runStart)
       const top = Math.min(y0, y1)
       const bot = Math.max(y0, y1)
-      ctx.fillStyle = 'rgba(220, 60, 60, 0.16)'
+      ctx.fillStyle = `rgba(220, 60, 60, ${0.22 * bgA})`
       ctx.fillRect(0, top, W, bot - top)
       runStart = null
     }
@@ -1165,6 +1420,8 @@ function drawRuler(cur: BallisticResult, recommend: BallisticResult | null): voi
     }
     flush(ANGLE_MAX)
   }
+
+  ctx.globalAlpha = markA
 
   ctx.strokeStyle = 'rgba(255,255,255,0.85)'
   ctx.beginPath()
@@ -1268,16 +1525,30 @@ function drawRuler(cur: BallisticResult, recommend: BallisticResult | null): voi
   ctx.lineTo(W - 4, angleToY(0))
   ctx.stroke()
 
-  // 绿线：推荐角 / 当前仰角（保持原样）
-  if (recommend) {
-    ctx.strokeStyle = 'rgba(80,220,120,0.5)'
-    ctx.lineWidth = 3
+  // ④ 目标仰角：红色虚线（由 R / Δh / 姿态反解，与当前绿线、最远点无关）
+  if (recommend && Number.isFinite(recommend.alpha)) {
+    const yAim = angleToY(recommend.alpha)
+    ctx.setLineDash([5, 4])
+    ctx.strokeStyle = 'rgba(255, 72, 72, 0.95)'
+    ctx.lineWidth = 1.85
     ctx.beginPath()
-    ctx.moveTo(axisX, angleToY(recommend.alpha))
-    ctx.lineTo(W - 6, angleToY(recommend.alpha))
+    ctx.moveTo(2, yAim)
+    ctx.lineTo(W - 2, yAim)
     ctx.stroke()
+    ctx.setLineDash([])
+
+    if (detail) {
+      ctx.font = '600 11px Consolas, monospace'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = 'rgba(255, 150, 150, 0.98)'
+      ctx.fillText(`${recommend.alpha.toFixed(1)}°`, axisX + 6, yAim)
+      ctx.fillStyle = 'rgba(255, 180, 180, 0.9)'
+      ctx.fillText('目标', axisX + 48, yAim)
+    }
   }
 
+  // 绿线：当前仰角（跟随/拖动）
   const yp = angleToY(state.pitch)
   ctx.strokeStyle = 'rgba(70,255,120,0.95)'
   ctx.lineWidth = 2
@@ -1288,12 +1559,13 @@ function drawRuler(cur: BallisticResult, recommend: BallisticResult | null): voi
   ctx.fillStyle = 'rgba(200,210,220,0.55)'
   ctx.font = '700 17px Segoe UI, sans-serif'
   if (canApplyProbe(cur)) {
-    const blast = declareRangeM(cur)
-    ctx.fillText(`${cur.range.toFixed(1)}→${blast.toFixed(1)}`, axisX + 6, yp - 8)
+    const blastM = declareRangeM(cur)
+    ctx.fillText(`${cur.range.toFixed(1)}→${blastM.toFixed(1)}`, axisX + 6, yp - 8)
   } else {
     ctx.fillText(cur.range.toFixed(1), axisX + 6, yp - 8)
   }
 
+  ctx.globalAlpha = 1
   positionCapTag(cap)
   positionFarTag(far.alpha)
 }

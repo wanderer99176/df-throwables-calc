@@ -25,7 +25,10 @@ export interface DfDesktopApi {
     rawSupported: boolean
   }>
   setClickThrough: (enabled: boolean) => void
+  /** 穿透开启时：true=忽略鼠标（点穿），false=本窗可点 */
+  setPassthroughIgnore: (ignore: boolean) => void
   toggleSlim: () => void
+  setSlim: (enabled: boolean) => void
   close: () => void
   setFollow: (enabled: boolean) => void
   setSens: (payload: { degPerCount?: number; invertY?: boolean }) => void

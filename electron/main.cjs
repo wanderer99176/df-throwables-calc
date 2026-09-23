@@ -24,7 +24,7 @@ function placeLeft(browserWindow) {
   const display = screen.getPrimaryDisplay()
   const { width: sw, height: sh } = display.workAreaSize
   const { x: wx, y: wy } = display.workArea
-  const w = slim ? 240 : Math.min(980, Math.floor(sw * 0.55))
+  const w = slim ? 200 : Math.min(980, Math.floor(sw * 0.55))
   const h = Math.min(sh - 20, 920)
   browserWindow.setBounds({
     x: wx + 8,
@@ -62,7 +62,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 280,
     height: 900,
-    minWidth: 200,
+    minWidth: 150,
     minHeight: 480,
     frame: false,
     transparent: true,
@@ -83,6 +83,15 @@ function createWindow() {
   win.setAlwaysOnTop(true, 'screen-saver')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   placeLeft(win)
+
+  win.webContents.setVisualZoomLevelLimits(1, 1)
+  win.webContents.on('before-input-event', (event, input) => {
+    if (!input.control && !input.meta) return
+    if (input.type !== 'keyDown') return
+    if (input.key === '+' || input.key === '=' || input.key === '-' || input.key === '_' || input.key === '0') {
+      event.preventDefault()
+    }
+  })
 
   win.once('ready-to-show', () => {
     win?.show()
@@ -106,11 +115,19 @@ function setClickThrough(enabled) {
   clickThrough = enabled
   if (!win) return
   if (enabled) {
+    // forward: true → 页面仍能收到 mousemove，便于顶栏悬停时临时恢复可点
     win.setIgnoreMouseEvents(true, { forward: true })
   } else {
     win.setIgnoreMouseEvents(false)
   }
   win.webContents.send('desktop:click-through', clickThrough)
+}
+
+/** 穿透模式下：鼠标在可点控件上时暂时关闭穿透，离开再开 */
+function setPassthroughIgnore(ignore) {
+  if (!win || !clickThrough) return
+  if (ignore) win.setIgnoreMouseEvents(true, { forward: true })
+  else win.setIgnoreMouseEvents(false)
 }
 
 function toggleSlim() {
@@ -120,12 +137,16 @@ function toggleSlim() {
   win.webContents.send('desktop:slim', slim)
 }
 
+function setSlim(next) {
+  slim = !!next
+  if (!win) return
+  placeLeft(win)
+  win.webContents.send('desktop:slim', slim)
+}
+
 function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+X', () => {
     setClickThrough(!clickThrough)
-  })
-  globalShortcut.register('CommandOrControl+Shift+S', () => {
-    toggleSlim()
   })
   globalShortcut.register('CommandOrControl+Shift+H', () => {
     if (!win) return
@@ -159,8 +180,14 @@ app.whenReady().then(() => {
   ipcMain.on('desktop:set-click-through', (_e, enabled) => {
     setClickThrough(!!enabled)
   })
+  ipcMain.on('desktop:set-passthrough-ignore', (_e, ignore) => {
+    setPassthroughIgnore(!!ignore)
+  })
   ipcMain.on('desktop:toggle-slim', () => {
     toggleSlim()
+  })
+  ipcMain.on('desktop:set-slim', (_e, enabled) => {
+    setSlim(!!enabled)
   })
   ipcMain.on('desktop:close', () => {
     win?.close()
