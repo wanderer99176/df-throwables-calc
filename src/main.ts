@@ -144,6 +144,7 @@ function buildApp(): void {
         </div>
         <div class="desktop-actions">
           <button type="button" class="desk-btn" id="btn-open-calc" title="打开完整计算器">计算</button>
+          <button type="button" class="desk-btn" id="btn-open-mask" title="打开光学仰角遮罩 Ctrl+Shift+M">遮罩</button>
           <button type="button" class="desk-btn" id="btn-follow" title="Ctrl+Shift+F">跟随</button>
           <button type="button" class="desk-btn" id="btn-zero" title="Ctrl+Shift+0">归零</button>
           <button type="button" class="desk-btn" id="btn-clickthrough" title="Ctrl+Shift+X">穿透</button>
@@ -1229,6 +1230,7 @@ function wireDesktop(): void {
   })
   document.querySelector('#btn-close')?.addEventListener('click', () => api?.close())
   document.querySelector('#btn-open-calc')?.addEventListener('click', () => api?.openCalc?.())
+  document.querySelector('#btn-open-mask')?.addEventListener('click', () => api?.openMask?.())
   document.querySelector('#btn-follow')?.addEventListener('click', () => api?.setFollow(!followOn))
   document.querySelector('#btn-zero')?.addEventListener('click', () => applyPitch(0))
   document.querySelector('#btn-opacity')?.addEventListener('click', (e) => {

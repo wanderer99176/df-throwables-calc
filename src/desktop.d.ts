@@ -31,6 +31,8 @@ export interface DfDesktopApi {
   close: () => void
   /** 打开 / 聚焦完整计算器窗口 */
   openCalc: () => void
+  /** 打开 / 显示光学仰角遮罩 */
+  openMask: () => void
   setFollow: (enabled: boolean) => void
   onClickThrough: (cb: (v: boolean) => void) => void
   onSlim: (cb: (v: boolean) => void) => void
