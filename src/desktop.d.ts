@@ -29,6 +29,8 @@ export interface DfDesktopApi {
   setPassthroughIgnore: (ignore: boolean) => void
   setSlim: (enabled: boolean) => void
   close: () => void
+  /** 打开 / 聚焦完整计算器窗口 */
+  openCalc: () => void
   setFollow: (enabled: boolean) => void
   onClickThrough: (cb: (v: boolean) => void) => void
   onSlim: (cb: (v: boolean) => void) => void

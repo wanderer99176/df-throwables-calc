@@ -9,42 +9,45 @@ export interface MapDef {
   builtinMetersPerPx: number
 }
 
+/** Electron file:// 与 Vite base:'./' 都需要相对路径，不能写绝对 /maps/... */
+const mapSrc = (file: string) => `${import.meta.env.BASE_URL}maps/${file}`
+
 /** 如图顺序：零号大坝 → 长弓溪谷 → 航天基地 → 巴克什 → 潮汐监狱 → AZ3 */
 export const MAPS: MapDef[] = [
   {
     id: 'zero-dam',
     name: '零号大坝',
-    src: '/maps/zero-dam.png',
+    src: mapSrc('zero-dam.png'),
     builtinMetersPerPx: 0.42,
   },
   {
     id: 'longbow-valley',
     name: '长弓溪谷',
-    src: '/maps/longbow-valley.png',
+    src: mapSrc('longbow-valley.png'),
     builtinMetersPerPx: 0.42,
   },
   {
     id: 'space-base',
     name: '航天基地',
-    src: '/maps/space-base.png',
+    src: mapSrc('space-base.png'),
     builtinMetersPerPx: 0.42,
   },
   {
     id: 'bakshi',
     name: '巴克什',
-    src: '/maps/bakshi.png',
+    src: mapSrc('bakshi.png'),
     builtinMetersPerPx: 0.42,
   },
   {
     id: 'tidal-prison',
     name: '潮汐监狱',
-    src: '/maps/tidal-prison.png',
+    src: mapSrc('tidal-prison.png'),
     builtinMetersPerPx: 0.42,
   },
   {
     id: 'az3',
     name: 'AZ3',
-    src: '/maps/az3.png',
+    src: mapSrc('az3.png'),
     builtinMetersPerPx: 0.42,
   },
 ]

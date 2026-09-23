@@ -3,13 +3,16 @@ const {
   BrowserWindow,
   globalShortcut,
   ipcMain,
+  Menu,
   screen,
 } = require('electron')
 const path = require('path')
 const rawMouse = require('./rawMouseWin.cjs')
 
 /** @type {Electron.BrowserWindow | null} */
-let win = null
+let rulerWin = null
+/** @type {Electron.BrowserWindow | null} */
+let calcWin = null
 let clickThrough = false
 let slim = true
 let followMouse = false
@@ -19,6 +22,7 @@ let invertY = true
 
 const isDev = !app.isPackaged && process.env.DF_DESKTOP_DEV === '1'
 const DEV_URL = process.env.DF_DEV_URL || 'http://127.0.0.1:5173'
+const DIST_HTML = path.join(__dirname, '..', 'dist', 'index.html')
 
 function placeLeft(browserWindow) {
   const display = screen.getPrimaryDisplay()
@@ -34,32 +38,69 @@ function placeLeft(browserWindow) {
   })
 }
 
+function placeCalc(browserWindow) {
+  const display = screen.getPrimaryDisplay()
+  const { width: sw, height: sh, x: wx, y: wy } = display.workArea
+  const w = Math.min(1280, Math.max(960, sw - 80))
+  const h = Math.min(860, Math.max(720, sh - 60))
+  browserWindow.setBounds({
+    x: wx + Math.floor((sw - w) / 2),
+    y: wy + Math.floor((sh - h) / 2),
+    width: w,
+    height: h,
+  })
+}
+
+function loadPage(browserWindow, query) {
+  if (isDev) {
+    const q = new URLSearchParams(query).toString()
+    browserWindow.loadURL(q ? `${DEV_URL}/?${q}` : `${DEV_URL}/`)
+  } else if (query && Object.keys(query).length) {
+    browserWindow.loadFile(DIST_HTML, { query })
+  } else {
+    browserWindow.loadFile(DIST_HTML)
+  }
+}
+
 function sendFollowDelta(dx, dy) {
-  if (!followMouse || !win) return
+  if (!followMouse || !rulerWin) return
   const signedDy = invertY ? -dy : dy
   const dPitch = signedDy * degPerCount
   if (dPitch === 0) return
-  win.webContents.send('desktop:mouse-delta', { dx, dy, dPitch })
+  rulerWin.webContents.send('desktop:mouse-delta', { dx, dy, dPitch })
 }
 
 function startMouseFollow() {
-  if (!win) return { ok: false, reason: '窗口未就绪' }
-  const result = rawMouse.start(win, (_dx, dy) => {
+  if (!rulerWin) return { ok: false, reason: '窗口未就绪' }
+  const result = rawMouse.start(rulerWin, (_dx, dy) => {
     sendFollowDelta(0, dy)
   })
   followMouse = !!(result && result.ok)
-  if (win) win.webContents.send('desktop:follow', { active: followMouse, ...result, degPerCount })
+  if (rulerWin) {
+    rulerWin.webContents.send('desktop:follow', {
+      active: followMouse,
+      ...result,
+      degPerCount,
+    })
+  }
   return result
 }
 
 function stopMouseFollow() {
   followMouse = false
   rawMouse.stop()
-  win?.webContents.send('desktop:follow', { active: false })
+  rulerWin?.webContents.send('desktop:follow', { active: false })
 }
 
-function createWindow() {
-  win = new BrowserWindow({
+function createRulerWindow() {
+  if (rulerWin && !rulerWin.isDestroyed()) {
+    if (rulerWin.isMinimized()) rulerWin.restore()
+    rulerWin.show()
+    rulerWin.focus()
+    return rulerWin
+  }
+
+  rulerWin = new BrowserWindow({
     width: 280,
     height: 900,
     minWidth: 150,
@@ -72,6 +113,7 @@ function createWindow() {
     resizable: true,
     skipTaskbar: false,
     show: false,
+    title: 'DF尺子',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -80,85 +122,157 @@ function createWindow() {
     },
   })
 
-  win.setAlwaysOnTop(true, 'screen-saver')
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  placeLeft(win)
+  rulerWin.setAlwaysOnTop(true, 'screen-saver')
+  rulerWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  placeLeft(rulerWin)
 
-  win.webContents.setVisualZoomLevelLimits(1, 1)
-  win.webContents.on('before-input-event', (event, input) => {
+  rulerWin.webContents.setVisualZoomLevelLimits(1, 1)
+  rulerWin.webContents.on('before-input-event', (event, input) => {
     if (!input.control && !input.meta) return
     if (input.type !== 'keyDown') return
-    if (input.key === '+' || input.key === '=' || input.key === '-' || input.key === '_' || input.key === '0') {
+    if (
+      input.key === '+' ||
+      input.key === '=' ||
+      input.key === '-' ||
+      input.key === '_' ||
+      input.key === '0'
+    ) {
       event.preventDefault()
     }
   })
 
-  win.once('ready-to-show', () => {
-    win?.show()
+  rulerWin.once('ready-to-show', () => {
+    rulerWin?.show()
   })
 
-  if (isDev) {
-    win.loadURL(`${DEV_URL}/?desktop=1&slim=1`)
-  } else {
-    win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), {
-      query: { desktop: '1', slim: '1' },
-    })
+  loadPage(rulerWin, { desktop: '1', slim: '1' })
+
+  rulerWin.on('closed', () => {
+    stopMouseFollow()
+    clickThrough = false
+    rulerWin = null
+  })
+
+  return rulerWin
+}
+
+function createCalcWindow() {
+  if (calcWin && !calcWin.isDestroyed()) {
+    if (calcWin.isMinimized()) calcWin.restore()
+    calcWin.show()
+    calcWin.focus()
+    return calcWin
   }
 
-  win.on('closed', () => {
-    stopMouseFollow()
-    win = null
+  calcWin = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 960,
+    minHeight: 640,
+    frame: true,
+    transparent: false,
+    backgroundColor: '#0a1018',
+    autoHideMenuBar: false,
+    show: false,
+    title: '定点打击计算器',
+    webPreferences: {
+      // 不挂桌面 preload：与浏览器版同一套 UI，避免误进侧边尺模式
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
   })
+
+  placeCalc(calcWin)
+
+  calcWin.once('ready-to-show', () => {
+    calcWin?.show()
+  })
+
+  // 无 desktop 查询参数 → 完整计算器（观感与浏览器版一致）
+  loadPage(calcWin, null)
+
+  calcWin.on('closed', () => {
+    calcWin = null
+  })
+
+  return calcWin
 }
 
 function setClickThrough(enabled) {
   clickThrough = enabled
-  if (!win) return
+  if (!rulerWin) return
   if (enabled) {
     // forward: true → 页面仍能收到 mousemove，便于顶栏悬停时临时恢复可点
-    win.setIgnoreMouseEvents(true, { forward: true })
+    rulerWin.setIgnoreMouseEvents(true, { forward: true })
   } else {
-    win.setIgnoreMouseEvents(false)
+    rulerWin.setIgnoreMouseEvents(false)
   }
-  win.webContents.send('desktop:click-through', clickThrough)
+  rulerWin.webContents.send('desktop:click-through', clickThrough)
 }
 
 /** 穿透模式下：鼠标在可点控件上时暂时关闭穿透，离开再开 */
 function setPassthroughIgnore(ignore) {
-  if (!win || !clickThrough) return
-  if (ignore) win.setIgnoreMouseEvents(true, { forward: true })
-  else win.setIgnoreMouseEvents(false)
+  if (!rulerWin || !clickThrough) return
+  if (ignore) rulerWin.setIgnoreMouseEvents(true, { forward: true })
+  else rulerWin.setIgnoreMouseEvents(false)
 }
 
 function setSlim(next) {
   slim = !!next
-  if (!win) return
-  placeLeft(win)
-  win.webContents.send('desktop:slim', slim)
+  if (!rulerWin) return
+  placeLeft(rulerWin)
+  rulerWin.webContents.send('desktop:slim', slim)
+}
+
+function buildAppMenu() {
+  const template = [
+    {
+      label: '窗口',
+      submenu: [
+        {
+          label: '打开侧边尺',
+          click: () => createRulerWindow(),
+        },
+        {
+          label: '打开计算器',
+          click: () => createCalcWindow(),
+        },
+        { type: 'separator' },
+        { role: 'quit', label: '退出全部' },
+      ],
+    },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
 function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+X', () => {
+    if (!rulerWin) return
     setClickThrough(!clickThrough)
   })
   globalShortcut.register('CommandOrControl+Shift+H', () => {
-    if (!win) return
-    if (win.isVisible()) win.hide()
-    else win.show()
+    if (!rulerWin) return
+    if (rulerWin.isVisible()) rulerWin.hide()
+    else rulerWin.show()
   })
   // 开关鼠标跟随
   globalShortcut.register('CommandOrControl+Shift+F', () => {
+    if (!rulerWin) return
     if (followMouse) stopMouseFollow()
     else startMouseFollow()
   })
   // 仰角归零（对齐地平线时按）
   globalShortcut.register('CommandOrControl+Shift+0', () => {
-    win?.webContents.send('desktop:pitch-zero')
+    rulerWin?.webContents.send('desktop:pitch-zero')
   })
 }
 
 app.whenReady().then(() => {
-  createWindow()
+  buildAppMenu()
+  // 先开计算器，再开置顶侧边尺（侧边尺盖在游戏/计算器之上）
+  createCalcWindow()
+  createRulerWindow()
   registerShortcuts()
 
   ipcMain.handle('desktop:get-state', () => ({
@@ -180,7 +294,10 @@ app.whenReady().then(() => {
     setSlim(!!enabled)
   })
   ipcMain.on('desktop:close', () => {
-    win?.close()
+    rulerWin?.close()
+  })
+  ipcMain.on('desktop:open-calc', () => {
+    createCalcWindow()
   })
   ipcMain.on('desktop:set-follow', (_e, enabled) => {
     if (enabled) startMouseFollow()
@@ -188,7 +305,10 @@ app.whenReady().then(() => {
   })
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createCalcWindow()
+      createRulerWindow()
+    }
   })
 })
 

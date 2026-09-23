@@ -59,8 +59,8 @@ const state: AppState = {
 }
 
 const bootParams = new URLSearchParams(location.search)
-const isDesktop =
-  bootParams.get('desktop') === '1' || Boolean(window.dfDesktop?.isDesktop)
+/** 仅靠 URL 判定：计算器窗不带 desktop=1，与浏览器版同一套 UI */
+const isDesktop = bootParams.get('desktop') === '1'
 const bootSlim = bootParams.get('slim') !== '0'
 
 let syncLock = false
@@ -142,6 +142,7 @@ function buildApp(): void {
           <button type="button" class="desk-btn danger" id="btn-close" title="关闭">×</button>
         </div>
         <div class="desktop-actions">
+          <button type="button" class="desk-btn" id="btn-open-calc" title="打开完整计算器">计算</button>
           <button type="button" class="desk-btn" id="btn-follow" title="Ctrl+Shift+F">跟随</button>
           <button type="button" class="desk-btn" id="btn-zero" title="Ctrl+Shift+0">归零</button>
           <button type="button" class="desk-btn" id="btn-clickthrough" title="Ctrl+Shift+X">穿透</button>
@@ -1179,6 +1180,7 @@ function wireDesktop(): void {
     syncClickThrough(next)
   })
   document.querySelector('#btn-close')?.addEventListener('click', () => api?.close())
+  document.querySelector('#btn-open-calc')?.addEventListener('click', () => api?.openCalc?.())
   document.querySelector('#btn-follow')?.addEventListener('click', () => api?.setFollow(!followOn))
   document.querySelector('#btn-zero')?.addEventListener('click', () => applyPitch(0))
   document.querySelector('#btn-opacity')?.addEventListener('click', (e) => {

@@ -1,7 +1,7 @@
 {
   "name": "df-throwables-calc",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "三角洲行动投掷物弹道尺子（离线计算 / 置顶对照）",
   "author": "DF Throwables Calc",
   "type": "module",
