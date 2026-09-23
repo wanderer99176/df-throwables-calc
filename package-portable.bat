@@ -21,7 +21,7 @@ if errorlevel 1 (
 )
 
 if not exist "release\" mkdir release
-copy /Y "%TEMP%\df-ruler-release\DF*portable.exe" "release\DF-Throwables-Ruler-portable.exe" >nul
+copy /Y "%TEMP%\df-ruler-release\DF-Throwables-Ruler*portable.exe" "release\DF-Throwables-Ruler-portable.exe" >nul
 echo [OK] Copied to release\DF-Throwables-Ruler-portable.exe
 explorer release
 pause

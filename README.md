@@ -1,64 +1,60 @@
 # DF 投掷物尺子 · 弹道计算器
 
-《三角洲行动》干员投掷物（露娜 5s 手雷 / 电击箭矢、乌鲁鲁燃烧瓶、牧羊人 2s 手雷等）的**离线弹道尺子与定点打击计算器**。
-
-依据公开测算数据复现物理模型与「手雷投射表」，用于：
+《三角洲行动》干员投掷物的**离线弹道尺子与定点打击计算器**（露娜 5s 手雷 / 电击箭矢、乌鲁鲁燃烧瓶、牧羊人 2s 手雷等）。
 
 - 按目标距离反解视角仰角 α，并给出多种身位 / 动作方案  
-- 按当前仰角读落点、飞行时间、掐雷窗口  
-- 在俯视图上标爆点与自身位置，把水平距离同步进计算器  
-- **桌面悬浮侧边尺**：跟随绿线 + 固定红虚目标标注、烟玻透明度、极简模式  
+- 桌面悬浮侧边尺：跟随绿线 + 固定红虚目标标注、烟玻透明度、极简模式  
+- 浏览器完整计算器：地图射程圈、同爆点多方案表、战术弹道图  
 
-仓库：<https://github.com/wanderer99176/df-throwables-calc>
+仓库 / 下载：<https://github.com/wanderer99176/df-throwables-calc>
 
-> **合规说明**：非外挂、非注入、非读取、不捕捉屏幕。仅本地计算与后期对照；仰角请自行用游戏内 M7 火控镜等读角，或用侧边尺「跟随」对照准星。
+> **合规说明**：非外挂、非注入、非读取、不捕捉屏幕。仅本地计算与对照；仰角请用游戏内 M7 火控镜等读角，或用侧边尺「跟随」对照准星。
 
 数据与思路参考：[BV1K1hE6VE2F](https://www.bilibili.com/video/BV1K1hE6VE2F/)（@可可龙 等测算内容）。
 
 ---
 
-## 快速开始
+## 普通用户：下载即用（推荐）
 
-需要已安装 [Node.js](https://nodejs.org/)（含 npm）。在项目根目录打开终端：
+不需要安装 Node.js，也不用敲命令。
 
-### 浏览器版（完整计算器）
+1. 打开 [Releases（发布页）](https://github.com/wanderer99176/df-throwables-calc/releases)  
+2. 下载最新的 **`DF-Throwables-Ruler-*-portable.exe`**（Windows 64 位便携版）  
+3. 放到任意文件夹，**双击运行**即可（侧边置顶尺）  
+
+游戏请用**无边框窗口**；若 Windows 弹出 SmartScreen「未知发布者」，选「更多信息」→「仍要运行」（当前未做代码签名，属正常现象）。
+
+| 快捷键 | 作用 |
+| --- | --- |
+| `Ctrl+Shift+F` | 跟随开/关（默认开） |
+| `Ctrl+Shift+0` | 仰角归零 |
+| `Ctrl+Shift+X` | 穿透开/关 |
+| `Ctrl+Shift+H` | 显示 / 隐藏窗口 |
+
+用法概要：在底部 **目标标注** 填 R / Δh → 看红虚线 → 用跟随把绿线对齐红虚后投出。细节见下方「桌面悬浮侧边尺」。
+
+完整网页计算器（地图、多方案表等）需从源码启动浏览器版，见下一节「开发者」。
+
+---
+
+## 开发者：从源码运行
+
+需要已安装 [Node.js](https://nodejs.org/)（含 npm）。在项目根目录：
 
 ```bash
 npm install
-npm run dev
 ```
-
-打开终端里提示的地址（默认 `http://127.0.0.1:5173`）。
-
-也可双击 `start-browser.bat`。
-
-### 游戏侧边置顶尺（推荐对照用）
-
-**最简单**：双击 `start-desktop.bat`。
-
-脚本为纯英文 ASCII，避免中文 Windows 下批处理编码乱码。
-
-或在终端：
-
-```bash
-npm install
-npm run desktop
-```
-
-会先构建网页，再打开**透明、无边框、始终置顶**的 Electron 窄窗，默认贴在屏幕左侧。
 
 | 命令 / 文件 | 说明 |
 | --- | --- |
-| `start-desktop.bat` | **双击启动置顶尺** |
-| `start-browser.bat` | 双击启动浏览器开发版 |
-| `package-portable.bat` | 修复 Electron 并打 Windows 便携包 → `release/` |
-| `npm run fix:electron` | 修复 Electron 二进制（路径含空格时常用） |
-| `npm run dev` | 浏览器开发预览 |
-| `npm run desktop` | 命令行开置顶尺 |
+| `start-desktop.bat` 或 `npm run desktop` | 构建并启动置顶尺 |
+| `start-browser.bat` 或 `npm run dev` | 浏览器完整计算器（Vite） |
 | `npm run desktop:dev` | Vite + Electron 联调 |
-| `npm run package` | 打包 Windows 便携 exe → `release/` |
-| `npm run build` | 构建到 `dist/` |
-| `npm run verify` | 用可可龙投射表逐行校验模型 |
+| `npm run package` | 打 Windows 便携包 → `release/` |
+| `package-portable.bat` | 修复 Electron 并打包（路径含空格时常用） |
+| `npm run fix:electron` | 仅修复 Electron 二进制 |
+| `npm run build` | 构建网页到 `dist/` |
+| `npm run verify` | 投射表校验 |
 
 ---
 
