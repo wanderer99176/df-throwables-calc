@@ -1,14 +1,13 @@
 /**
- * 仰角遮罩：全程点穿。
- * 默认「全角」−30°～80°；可选「光学」按 FOV 透视（约 ±34°）。
+ * 光学仰角遮罩：全程点穿。位置 / 透明度由计算器顶栏控制（localStorage + 主进程）。
  */
 
 import {
   DEFAULT_MASK_CONFIG,
   type FovMaskConfig,
-  type MaskMode,
   halfViewPitchDeg,
   pitchToCanvasY,
+  sliderToBgAlpha,
   tickList,
   verticalFovDeg,
 } from './fovOptics'
@@ -16,19 +15,18 @@ import './style.css'
 
 const LS_HFOV = 'df-mask-hfov'
 const LS_ASPECT = 'df-mask-aspect'
-const LS_MODE = 'df-mask-mode'
+const LS_OPACITY = 'df-mask-opacity'
 
 function loadConfig(): FovMaskConfig {
   const hf = Number(localStorage.getItem(LS_HFOV))
   const asp = Number(localStorage.getItem(LS_ASPECT))
-  const modeRaw = localStorage.getItem(LS_MODE)
-  const mode: MaskMode = modeRaw === 'optical' ? 'optical' : 'full'
+  const op = Number(localStorage.getItem(LS_OPACITY))
+  const slider = Number.isFinite(op) ? op : 55
   return {
     hFovDeg: Number.isFinite(hf) && hf > 10 && hf < 170 ? hf : DEFAULT_MASK_CONFIG.hFovDeg,
     aspect: Number.isFinite(asp) && asp > 0.3 && asp < 4 ? asp : DEFAULT_MASK_CONFIG.aspect,
-    mode,
-    fullMinDeg: DEFAULT_MASK_CONFIG.fullMinDeg,
-    fullMaxDeg: DEFAULT_MASK_CONFIG.fullMaxDeg,
+    bgAlpha: sliderToBgAlpha(slider),
+    markAlpha: slider >= 20 ? 1 : 0.35 + (slider / 20) * 0.65,
   }
 }
 
@@ -68,21 +66,19 @@ export function mountAngleMask(): void {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, W, H)
 
-    if (cfg.mode === 'full') {
-      meta.textContent = `全角 ${cfg.fullMinDeg}°～${cfg.fullMaxDeg}°（均分）`
-    } else {
-      const half = halfViewPitchDeg(cfg)
-      const vFov = verticalFovDeg(cfg.hFovDeg, cfg.aspect)
-      meta.textContent = `光学 FOV${cfg.hFovDeg}° · ${formatAspect(cfg.aspect)} · ±${half.toFixed(0)}°`
-      void vFov
-    }
+    const half = halfViewPitchDeg(cfg)
+    const vFov = verticalFovDeg(cfg.hFovDeg, cfg.aspect)
+    meta.textContent = `光学 FOV${cfg.hFovDeg}° · ${formatAspect(cfg.aspect)} · ±${half.toFixed(0)}° · v≈${vFov.toFixed(0)}°`
+    meta.style.opacity = String(0.45 + 0.4 * cfg.markAlpha)
 
-    ctx.fillStyle = 'rgba(8, 14, 22, 0.38)'
+    ctx.fillStyle = `rgba(8, 14, 22, ${cfg.bgAlpha})`
     ctx.fillRect(0, 0, W, H)
 
     const cx = 28
     const yOf = (alpha: number) => pitchToCanvasY(alpha, cfg, H)
+    const mark = cfg.markAlpha
 
+    ctx.globalAlpha = mark
     ctx.strokeStyle = 'rgba(255,255,255,0.55)'
     ctx.lineWidth = 1.5
     ctx.beginPath()
@@ -132,14 +128,11 @@ export function mountAngleMask(): void {
 
     ctx.fillStyle = 'rgba(200,210,220,0.55)'
     ctx.font = '11px "Segoe UI","Microsoft YaHei UI",sans-serif'
-    ctx.fillText(
-      cfg.mode === 'full' ? '均分刻度 · 对照弹道尺' : '地平线↓ = 已抬头',
-      8,
-      H - 14,
-    )
+    ctx.fillText('地平线↓ = 已抬头', 8, H - 14)
+    ctx.globalAlpha = 1
   }
 
   paint()
   window.addEventListener('resize', paint)
-  window.setInterval(paint, 1500)
+  window.setInterval(paint, 800)
 }

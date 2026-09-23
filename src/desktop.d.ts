@@ -44,6 +44,8 @@ declare global {
       isShell: true
       openRuler: () => void
       openMask: () => void
+      getMaskLayout: () => Promise<{ xPercent: number; opacity: number }>
+      setMaskLayout: (partial: { xPercent?: number; opacity?: number }) => void
     }
   }
 }

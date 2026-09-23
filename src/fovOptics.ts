@@ -1,26 +1,24 @@
 /**
- * 仰角遮罩刻度：
- * - full（默认）：整段 −30°～80° 均分，对照弹道尺读角
- * - optical：y∝tan(α)，只覆盖当前 FOV 半高（约 ±34°），用地平线读角
+ * 屏幕光学仰角遮罩：y ∝ tan(α)
+ * 准星恒在屏心；抬头 α 时，地平线落到「−α」刻度 → 当前仰角即为 α。
  */
 
-export type MaskMode = 'full' | 'optical'
-
 export interface FovMaskConfig {
+  /** 水平 FOV（度），游戏设置 */
   hFovDeg: number
+  /** 宽/高，例如 16/9；竖屏 9/16 */
   aspect: number
-  mode: MaskMode
-  /** 全角模式上下限 */
-  fullMinDeg: number
-  fullMaxDeg: number
+  /** 烟玻底色不透明度 0～1 */
+  bgAlpha: number
+  /** 刻度不透明度 0～1 */
+  markAlpha: number
 }
 
 export const DEFAULT_MASK_CONFIG: FovMaskConfig = {
   hFovDeg: 100,
   aspect: 16 / 9,
-  mode: 'full',
-  fullMinDeg: -30,
-  fullMaxDeg: 80,
+  bgAlpha: 0.38,
+  markAlpha: 1,
 }
 
 export function verticalFovDeg(hFovDeg: number, aspect: number): number {
@@ -33,28 +31,16 @@ export function halfViewPitchDeg(cfg: FovMaskConfig): number {
   return verticalFovDeg(cfg.hFovDeg, cfg.aspect) / 2
 }
 
-/** α → 画布 Y（上小下大）；full 线性，optical 为 tan 投影 */
+/** α → 画布 Y（上小下大），光学 tan 投影 */
 export function pitchToCanvasY(alphaDeg: number, cfg: FovMaskConfig, height: number): number {
-  const pad = 10
-  const usable = Math.max(1, height - pad * 2)
-  if (cfg.mode === 'full') {
-    const t = (cfg.fullMaxDeg - alphaDeg) / (cfg.fullMaxDeg - cfg.fullMinDeg)
-    return pad + t * usable
-  }
   const half = halfViewPitchDeg(cfg)
   const a = (alphaDeg * Math.PI) / 180
   const h = (half * Math.PI) / 180
-  const yNorm = -Math.tan(a) / Math.tan(h) // 上为负
+  const yNorm = -Math.tan(a) / Math.tan(h)
   return height / 2 + (yNorm * height) / 2
 }
 
 export function tickList(cfg: FovMaskConfig, step: number): number[] {
-  if (cfg.mode === 'full') {
-    const out: number[] = []
-    const start = Math.ceil(cfg.fullMinDeg / step) * step
-    for (let a = start; a <= cfg.fullMaxDeg + 1e-9; a += step) out.push(a)
-    return out
-  }
   const half = halfViewPitchDeg(cfg)
   const max = Math.min(40, half - 0.05)
   const out: number[] = []
@@ -62,4 +48,16 @@ export function tickList(cfg: FovMaskConfig, step: number): number[] {
     if (Math.abs(a) <= half - 0.01) out.push(Number(a.toFixed(4)))
   }
   return out
+}
+
+/** 滑块 0～100 → 窗口整体透明度（Electron setOpacity） */
+export function sliderToWindowOpacity(slider: number): number {
+  const t = Math.min(100, Math.max(0, slider)) / 100
+  return 0.12 + 0.88 * t
+}
+
+/** 滑块 → 画布烟玻底 alpha */
+export function sliderToBgAlpha(slider: number): number {
+  const t = Math.min(100, Math.max(0, slider)) / 100
+  return 0.04 + 0.42 * t
 }

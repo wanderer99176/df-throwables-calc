@@ -85,6 +85,61 @@ let invertY = true
 const isDev = !app.isPackaged && process.env.DF_DESKTOP_DEV === '1'
 const DEV_URL = process.env.DF_DEV_URL || 'http://127.0.0.1:5173'
 const DIST_HTML = path.join(__dirname, '..', 'dist', 'index.html')
+const MASK_LAYOUT_PATH = path.join(app.getPath('userData'), 'mask-layout.json')
+const MASK_W = 120
+
+/** @type {{ xPercent: number, opacity: number }} */
+let maskLayout = { xPercent: 0, opacity: 55 }
+
+function loadMaskLayoutFile() {
+  try {
+    const raw = require('fs').readFileSync(MASK_LAYOUT_PATH, 'utf8')
+    const o = JSON.parse(raw)
+    if (Number.isFinite(o.xPercent)) maskLayout.xPercent = Math.min(100, Math.max(0, o.xPercent))
+    if (Number.isFinite(o.opacity)) maskLayout.opacity = Math.min(100, Math.max(0, o.opacity))
+  } catch {
+    /* defaults */
+  }
+}
+
+function saveMaskLayoutFile() {
+  try {
+    require('fs').mkdirSync(path.dirname(MASK_LAYOUT_PATH), { recursive: true })
+    require('fs').writeFileSync(MASK_LAYOUT_PATH, JSON.stringify(maskLayout), 'utf8')
+  } catch {
+    /* ignore */
+  }
+}
+
+function sliderToWindowOpacity(slider) {
+  const t = Math.min(100, Math.max(0, slider)) / 100
+  return 0.12 + 0.88 * t
+}
+
+/** 光学遮罩水平位置：xPercent 0=最左，100=最右 */
+function placeMask(browserWindow, xPercent = maskLayout.xPercent) {
+  const display = screen.getPrimaryDisplay()
+  const { x, y, width, height } = display.bounds
+  const w = MASK_W
+  const pct = Math.min(100, Math.max(0, Number(xPercent) || 0))
+  const left = Math.round(x + ((width - w) * pct) / 100)
+  browserWindow.setBounds({
+    x: left,
+    y,
+    width: w,
+    height,
+  })
+}
+
+function applyMaskLayout() {
+  if (!maskWin || maskWin.isDestroyed()) return
+  placeMask(maskWin, maskLayout.xPercent)
+  try {
+    maskWin.setOpacity(sliderToWindowOpacity(maskLayout.opacity))
+  } catch {
+    /* ignore */
+  }
+}
 
 /** 关掉全部子窗，只留计算器（同进程内再次激活时） */
 function resetToCalcOnly() {
@@ -116,19 +171,6 @@ function placeLeft(browserWindow) {
     y: wy + Math.floor((sh - h) / 2),
     width: w,
     height: h,
-  })
-}
-
-/** 光学遮罩贴右侧，避免和左侧弹道尺叠在一起 */
-function placeMask(browserWindow) {
-  const display = screen.getPrimaryDisplay()
-  const { x, y, width, height } = display.bounds
-  const w = 120
-  browserWindow.setBounds({
-    x: x + width - w - 4,
-    y,
-    width: w,
-    height,
   })
 }
 
@@ -273,6 +315,7 @@ function createRulerWindow() {
 function createMaskWindow() {
   if (maskWin && !maskWin.isDestroyed()) {
     if (maskWin.isMinimized()) maskWin.restore()
+    applyMaskLayout()
     maskWin.showInactive()
     return maskWin
   }
@@ -300,10 +343,11 @@ function createMaskWindow() {
 
   maskWin.setAlwaysOnTop(true, 'screen-saver')
   maskWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  placeMask(maskWin)
+  applyMaskLayout()
   maskWin.setIgnoreMouseEvents(true)
 
   maskWin.once('ready-to-show', () => {
+    applyMaskLayout()
     maskWin?.showInactive()
   })
 
@@ -434,6 +478,7 @@ if (gotLock) {
   })
 
   app.whenReady().then(() => {
+    loadMaskLayoutFile()
     buildAppMenu()
     // 启动只开计算器；两种侧栏由顶栏 / 菜单 / 快捷键按需打开
     createCalcWindow()
@@ -447,7 +492,20 @@ if (gotLock) {
       degPerCount,
       invertY,
       rawSupported: rawMouse.isSupported,
+      maskLayout: { ...maskLayout },
     }))
+    ipcMain.handle('desktop:get-mask-layout', () => ({ ...maskLayout }))
+    ipcMain.on('desktop:set-mask-layout', (_e, partial) => {
+      if (!partial || typeof partial !== 'object') return
+      if (Number.isFinite(partial.xPercent)) {
+        maskLayout.xPercent = Math.min(100, Math.max(0, Number(partial.xPercent)))
+      }
+      if (Number.isFinite(partial.opacity)) {
+        maskLayout.opacity = Math.min(100, Math.max(0, Number(partial.opacity)))
+      }
+      saveMaskLayoutFile()
+      applyMaskLayout()
+    })
     ipcMain.on('desktop:set-click-through', (_e, enabled) => {
       setClickThrough(!!enabled)
     })

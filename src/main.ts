@@ -178,10 +178,16 @@ function buildApp(): void {
           <span class="mask-fov-label">侧栏</span>
           <button type="button" class="desk-btn" id="btn-shell-ruler">弹道尺</button>
           <button type="button" class="desk-btn" id="btn-shell-mask">仰角遮罩</button>
-          <div class="seg seg-mini" id="mask-mode-seg" title="遮罩刻度模式">
-            <button type="button" data-mode="full">全角</button>
-            <button type="button" data-mode="optical">光学</button>
+          <div class="seg seg-mini" id="mask-pos-seg" title="遮罩水平位置">
+            <button type="button" data-pos="0">左</button>
+            <button type="button" data-pos="25">偏左</button>
+            <button type="button" data-pos="50">中</button>
+            <button type="button" data-pos="75">偏右</button>
+            <button type="button" data-pos="100">右</button>
           </div>
+          <label>位置% <input type="number" id="mask-xpos" min="0" max="100" step="1" /></label>
+          <label>浓度 <input type="range" id="mask-opacity" min="0" max="100" step="1" /></label>
+          <strong id="mask-opacity-val">55</strong>
           <label>FOV <input type="number" id="mask-hfov" min="60" max="120" step="1" /></label>
           <div class="seg seg-mini" id="mask-aspect-seg">
             <button type="button" data-aspect="1.777778">16:9</button>
@@ -815,7 +821,8 @@ function renderOptionsTable(): void {
 function wireMaskFovBar(): void {
   const LS_HFOV = 'df-mask-hfov'
   const LS_ASPECT = 'df-mask-aspect'
-  const LS_MODE = 'df-mask-mode'
+  const LS_OPACITY = 'df-mask-opacity'
+  const LS_XPOS = 'df-mask-xpos'
   const bar = document.querySelector('#mask-fov-bar')
   if (!bar) return
 
@@ -831,7 +838,10 @@ function wireMaskFovBar(): void {
   }
 
   const hfovEl = document.querySelector<HTMLInputElement>('#mask-hfov')
-  if (!hfovEl) return
+  const xposEl = document.querySelector<HTMLInputElement>('#mask-xpos')
+  const opEl = document.querySelector<HTMLInputElement>('#mask-opacity')
+  const opVal = document.querySelector('#mask-opacity-val')
+  if (!hfovEl || !xposEl || !opEl) return
 
   const readHfov = () => {
     const n = Number(localStorage.getItem(LS_HFOV))
@@ -841,18 +851,35 @@ function wireMaskFovBar(): void {
     const n = Number(localStorage.getItem(LS_ASPECT))
     return Number.isFinite(n) && n > 0.3 ? n : 16 / 9
   }
-  const readMode = () => (localStorage.getItem(LS_MODE) === 'optical' ? 'optical' : 'full')
+  const readX = () => {
+    const n = Number(localStorage.getItem(LS_XPOS))
+    return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0
+  }
+  const readOp = () => {
+    const n = Number(localStorage.getItem(LS_OPACITY))
+    return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 55
+  }
+
+  const pushLayout = (partial: { xPercent?: number; opacity?: number }) => {
+    if (partial.xPercent != null) localStorage.setItem(LS_XPOS, String(partial.xPercent))
+    if (partial.opacity != null) localStorage.setItem(LS_OPACITY, String(partial.opacity))
+    shell?.setMaskLayout?.(partial)
+  }
 
   const syncUi = () => {
     hfovEl.value = String(Math.round(readHfov()))
+    const x = readX()
+    const op = readOp()
+    xposEl.value = String(Math.round(x))
+    opEl.value = String(Math.round(op))
+    if (opVal) opVal.textContent = String(Math.round(op))
     const asp = readAspect()
-    const mode = readMode()
     document.querySelectorAll<HTMLButtonElement>('#mask-aspect-seg button').forEach((b) => {
       const v = Number(b.dataset.aspect)
       b.classList.toggle('active', Math.abs(v - asp) < 0.02)
     })
-    document.querySelectorAll<HTMLButtonElement>('#mask-mode-seg button').forEach((b) => {
-      b.classList.toggle('active', b.dataset.mode === mode)
+    document.querySelectorAll<HTMLButtonElement>('#mask-pos-seg button').forEach((b) => {
+      b.classList.toggle('active', Number(b.dataset.pos) === Math.round(x))
     })
   }
 
@@ -867,14 +894,36 @@ function wireMaskFovBar(): void {
     localStorage.setItem(LS_ASPECT, btn.dataset.aspect)
     syncUi()
   })
-  document.querySelector('#mask-mode-seg')?.addEventListener('click', (e) => {
+  document.querySelector('#mask-pos-seg')?.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('button')
-    if (!btn?.dataset.mode) return
-    localStorage.setItem(LS_MODE, btn.dataset.mode)
+    if (btn?.dataset.pos == null) return
+    const x = Number(btn.dataset.pos)
+    pushLayout({ xPercent: x })
     syncUi()
   })
-  // 默认全角（若从未设置过）
-  if (!localStorage.getItem(LS_MODE)) localStorage.setItem(LS_MODE, 'full')
+  xposEl.addEventListener('change', () => {
+    const x = Math.min(100, Math.max(0, Math.round(Number(xposEl.value) || 0)))
+    pushLayout({ xPercent: x })
+    syncUi()
+  })
+  opEl.addEventListener('input', () => {
+    const op = Math.min(100, Math.max(0, Math.round(Number(opEl.value) || 0)))
+    if (opVal) opVal.textContent = String(op)
+    pushLayout({ opacity: op })
+  })
+
+  // 与主进程已存布局对齐
+  void shell?.getMaskLayout?.().then((lay) => {
+    if (!lay) return
+    localStorage.setItem(LS_XPOS, String(lay.xPercent))
+    localStorage.setItem(LS_OPACITY, String(lay.opacity))
+    syncUi()
+  })
+
+  if (!localStorage.getItem(LS_XPOS)) localStorage.setItem(LS_XPOS, '0')
+  if (!localStorage.getItem(LS_OPACITY)) localStorage.setItem(LS_OPACITY, '55')
+  // 推一次默认/已存到主进程
+  pushLayout({ xPercent: readX(), opacity: readOp() })
   syncUi()
 }
 

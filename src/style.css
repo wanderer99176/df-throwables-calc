@@ -1041,13 +1041,16 @@ body.desktop.angle-mask #app {
   gap: 6px;
 }
 
-.mask-fov-bar input[type='number'] {
-  width: 4.2em;
-  padding: 2px 6px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.35);
+.mask-fov-bar input[type='range'] {
+  width: 88px;
+  vertical-align: middle;
+}
+
+.mask-fov-bar #mask-opacity-val {
+  min-width: 1.6em;
+  font-variant-numeric: tabular-nums;
   color: var(--ink);
+  font-size: 12px;
 }
 
 .seg-mini {
