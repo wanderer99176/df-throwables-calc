@@ -63,7 +63,6 @@ const bootParams = new URLSearchParams(location.search)
 const isDesktop = bootParams.get('desktop') === '1'
 const bootSlim = bootParams.get('slim') !== '0'
 const isAngleMask = bootParams.get('mask') === '1'
-const isPortraitCalc = bootParams.get('portrait') === '1'
 
 let syncLock = false
 /** 桌面侧边尺烟玻底色 alpha（仅底，刻度另控） */
@@ -71,6 +70,15 @@ let deskUiOpacity = 0.41
 /** 桌面「目标标注」：固定红虚线用，不随跟随/绿线改写 */
 let deskAimR = 72
 let deskAimDh = 0
+
+/** 按窗口宽高比切换横屏 / 竖屏排版（可拉拽窗口即时切换） */
+function syncCalcLayoutMode(): void {
+  if (isDesktop || isAngleMask) return
+  document.body.classList.add('calc-shell')
+  const portrait = window.innerHeight > window.innerWidth * 1.02
+  document.body.classList.toggle('calc-portrait', portrait)
+  document.body.classList.toggle('calc-landscape', !portrait)
+}
 
 if (isDesktop) {
   // 桌面默认：窄窗 + 仅标尺
@@ -81,8 +89,9 @@ if (isDesktop) {
   deskAimDh = state.deltaH
 }
 
-if (isPortraitCalc && !isDesktop && !isAngleMask) {
-  document.body.classList.add('calc-portrait')
+if (!isDesktop && !isAngleMask) {
+  syncCalcLayoutMode()
+  window.addEventListener('resize', syncCalcLayoutMode)
 }
 
 let applyPitch: (v: number) => void = (v) => {

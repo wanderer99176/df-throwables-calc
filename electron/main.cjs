@@ -177,13 +177,23 @@ function placeLeft(browserWindow) {
 function placeCalc(browserWindow) {
   const display = screen.getPrimaryDisplay()
   const { width: sw, height: sh, x: wx, y: wy } = display.workArea
-  // 16:9 竖屏：宽:高 = 9:16
-  let h = Math.min(sh - 24, 1280)
-  let w = Math.round((h * 9) / 16)
-  if (w > sw - 24) {
-    w = Math.max(420, sw - 24)
-    h = Math.round((w * 16) / 9)
-    if (h > sh - 24) h = sh - 24
+  const portraitScreen = sh > sw
+  let w
+  let h
+  if (portraitScreen) {
+    // 竖屏显示器 → 9:16 窗口
+    h = Math.min(sh - 24, 1280)
+    w = Math.round((h * 9) / 16)
+    if (w > sw - 24) {
+      w = Math.max(420, sw - 24)
+      h = Math.min(sh - 24, Math.round((w * 16) / 9))
+    }
+  } else {
+    // 横屏（如 27" 4K 16:9）→ 宽屏窗口，方便常规收看
+    w = Math.min(sw - 80, 1480)
+    h = Math.min(sh - 60, Math.round((w * 9) / 16) + 80)
+    if (h < 720) h = Math.min(sh - 60, 720)
+    if (w < 1100) w = Math.min(sw - 40, 1100)
   }
   browserWindow.setBounds({
     x: wx + Math.floor((sw - w) / 2),
@@ -369,10 +379,10 @@ function createCalcWindow() {
   }
 
   calcWin = new BrowserWindow({
-    width: 720,
-    height: 1280,
+    width: 1280,
+    height: 800,
     minWidth: 420,
-    minHeight: 720,
+    minHeight: 560,
     frame: true,
     transparent: false,
     backgroundColor: '#0a1018',
@@ -393,8 +403,8 @@ function createCalcWindow() {
     calcWin?.show()
   })
 
-  // portrait=1 → 竖屏 9:16 排版
-  loadPage(calcWin, { portrait: '1' })
+  // 排版由页面按窗口宽高比自动切换横/竖
+  loadPage(calcWin, null)
 
   calcWin.on('closed', () => {
     calcWin = null
