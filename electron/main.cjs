@@ -9,6 +9,16 @@ const {
 const path = require('path')
 const rawMouse = require('./rawMouseWin.cjs')
 
+// 禁止连点 / 多开：第二次启动只唤起已有窗口
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    focusExisting()
+  })
+}
+
 /** @type {Electron.BrowserWindow | null} */
 let rulerWin = null
 /** @type {Electron.BrowserWindow | null} */
@@ -25,6 +35,18 @@ let invertY = true
 const isDev = !app.isPackaged && process.env.DF_DESKTOP_DEV === '1'
 const DEV_URL = process.env.DF_DEV_URL || 'http://127.0.0.1:5173'
 const DIST_HTML = path.join(__dirname, '..', 'dist', 'index.html')
+
+function focusExisting() {
+  for (const w of [calcWin, rulerWin, maskWin]) {
+    if (!w || w.isDestroyed()) continue
+    if (w.isMinimized()) w.restore()
+    if (w === maskWin) w.showInactive()
+    else {
+      w.show()
+      w.focus()
+    }
+  }
+}
 
 function placeLeft(browserWindow) {
   const display = screen.getPrimaryDisplay()
@@ -343,10 +365,11 @@ function registerShortcuts() {
 }
 
 app.whenReady().then(() => {
+  if (!gotLock) return
   buildAppMenu()
+  // 默认只开计算器 + 弹道尺；光学遮罩按需（菜单 / Ctrl+Shift+M / 尺上「遮罩」）
   createCalcWindow()
   createRulerWindow()
-  createMaskWindow()
   registerShortcuts()
 
   ipcMain.handle('desktop:get-state', () => ({
@@ -385,16 +408,17 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createCalcWindow()
       createRulerWindow()
-      createMaskWindow()
     }
   })
 })
 
 app.on('will-quit', () => {
+  if (!gotLock) return
   stopMouseFollow()
   globalShortcut.unregisterAll()
 })
 
 app.on('window-all-closed', () => {
+  if (!gotLock) return
   if (process.platform !== 'darwin') app.quit()
 })
