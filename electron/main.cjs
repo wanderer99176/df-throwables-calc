@@ -157,25 +157,33 @@ function loadPage(browserWindow, query) {
 }
 
 function sendFollowDelta(dx, dy) {
-  if (!followMouse || !rulerWin) return
+  if (!followMouse || !rulerWin || rulerWin.isDestroyed()) return
   const signedDy = invertY ? -dy : dy
   const dPitch = signedDy * degPerCount
   if (dPitch === 0) return
-  rulerWin.webContents.send('desktop:mouse-delta', { dx, dy, dPitch })
+  try {
+    rulerWin.webContents.send('desktop:mouse-delta', { dx, dy, dPitch })
+  } catch {
+    /* window tearing down */
+  }
 }
 
 function startMouseFollow() {
-  if (!rulerWin) return { ok: false, reason: '窗口未就绪' }
+  if (!rulerWin || rulerWin.isDestroyed()) return { ok: false, reason: '窗口未就绪' }
   const result = rawMouse.start(rulerWin, (_dx, dy) => {
     sendFollowDelta(0, dy)
   })
   followMouse = !!(result && result.ok)
-  if (rulerWin) {
-    rulerWin.webContents.send('desktop:follow', {
-      active: followMouse,
-      ...result,
-      degPerCount,
-    })
+  if (rulerWin && !rulerWin.isDestroyed()) {
+    try {
+      rulerWin.webContents.send('desktop:follow', {
+        active: followMouse,
+        ...result,
+        degPerCount,
+      })
+    } catch {
+      /* ignore */
+    }
   }
   return result
 }
@@ -183,7 +191,13 @@ function startMouseFollow() {
 function stopMouseFollow() {
   followMouse = false
   rawMouse.stop()
-  rulerWin?.webContents.send('desktop:follow', { active: false })
+  // closed 事件里窗口已销毁，不能再 send
+  if (!rulerWin || rulerWin.isDestroyed()) return
+  try {
+    rulerWin.webContents.send('desktop:follow', { active: false })
+  } catch {
+    /* ignore */
+  }
 }
 
 function createRulerWindow() {
@@ -340,26 +354,34 @@ function createCalcWindow() {
 
 function setClickThrough(enabled) {
   clickThrough = enabled
-  if (!rulerWin) return
+  if (!rulerWin || rulerWin.isDestroyed()) return
   if (enabled) {
     rulerWin.setIgnoreMouseEvents(true, { forward: true })
   } else {
     rulerWin.setIgnoreMouseEvents(false)
   }
-  rulerWin.webContents.send('desktop:click-through', clickThrough)
+  try {
+    rulerWin.webContents.send('desktop:click-through', clickThrough)
+  } catch {
+    /* ignore */
+  }
 }
 
 function setPassthroughIgnore(ignore) {
-  if (!rulerWin || !clickThrough) return
+  if (!rulerWin || rulerWin.isDestroyed() || !clickThrough) return
   if (ignore) rulerWin.setIgnoreMouseEvents(true, { forward: true })
   else rulerWin.setIgnoreMouseEvents(false)
 }
 
 function setSlim(next) {
   slim = !!next
-  if (!rulerWin) return
+  if (!rulerWin || rulerWin.isDestroyed()) return
   placeLeft(rulerWin)
-  rulerWin.webContents.send('desktop:slim', slim)
+  try {
+    rulerWin.webContents.send('desktop:slim', slim)
+  } catch {
+    /* ignore */
+  }
 }
 
 function buildAppMenu() {
