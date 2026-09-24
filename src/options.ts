@@ -166,6 +166,7 @@ export function solveAllActionOptions(
   deltaH = 0,
   heightMode: ThrowParams['heightMode'] = 'action',
   bounceLand = false,
+  ballistic: Pick<ThrowParams, 'v0' | 'offsetDeg'> = {},
 ): ThrowOption[] {
   const out: ThrowOption[] = []
   const tol = 1.5
@@ -184,6 +185,7 @@ export function solveAllActionOptions(
       actionId: mode.id,
       heightMode,
       deltaH,
+      ...ballistic,
     }
     const sol = solveAnglesForRange(aimLand, params)
     if (sol.unreachable) {

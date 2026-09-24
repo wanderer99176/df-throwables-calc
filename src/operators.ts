@@ -1,5 +1,7 @@
 /** 干员 → 仅该干员道具 + 游戏内技能属性面板 */
 
+import { LUNA_ARROW_OFFSET_DEG, LUNA_ARROW_V0, type ThrowParams } from './physics'
+
 export type OperatorId = 'luna' | 'uluru' | 'shepherd' | 'weilong' | 'gu'
 export type ThrowableKind = 'generic' | 'special'
 export type BallisticModel = 'standard' | 'luna_arrow' | 'cruise_missile' | 'short_fuse'
@@ -17,6 +19,12 @@ export interface ThrowableDef {
   kind: ThrowableKind
   model: BallisticModel
   blurb?: string
+  /** 覆盖默认初速；不填则用手雷 27 */
+  v0?: number
+  /** 覆盖准星补角；电箭为 0，手雷默认 +7.5 */
+  offsetDeg?: number
+  /** 目标距离滑块建议上限（米） */
+  targetMaxM?: number
   /** 引信总时长（秒）；无引信道具不填 */
   fuseS?: number
   /** 有效爆炸半径（米）；落点 &lt; 此值时可能自伤 */
@@ -87,29 +95,47 @@ export const OPERATORS: OperatorDef[] = [
         name: '电击箭矢',
         kind: 'special',
         model: 'luna_arrow',
-        blurb: '站立拉满约 77m（不蓄力）',
+        v0: LUNA_ARROW_V0,
+        offsetDeg: LUNA_ARROW_OFFSET_DEG,
+        targetMaxM: 180,
+        blurb: '点射 v₀≈45 · 无补角 · 实测拟合暂定（满蓄未建模）',
         skillStats: [
           { group: '定位特点', name: '武器类型', value: '特殊技能箭矢', note: '侦察 / 电击控制' },
-          { group: '机制属性', name: '站立拉满射程', value: '约 77 m', note: '不蓄力口径' },
-          { group: '时间/物理', name: '弹道模型', value: '特殊算式', note: '非手雷主算，尺子仰角仅对照' },
-          { group: '时间/物理', name: '隐藏仰角补角', value: '+7.5°（参考）', note: '若沿用通用读角习惯' },
+          { group: '机制属性', name: '射击模式', value: '点射（本版）', note: '满蓄抛物线不同，尚未建模' },
+          { group: '机制属性', name: '准星补角', value: '0°', note: 'θ = α，无手雷 +7.5°' },
+          { group: '时间/物理', name: '初速度 v₀', value: '≈45 m/s', note: '站立点射多点拟合暂定' },
+          { group: '时间/物理', name: '重力 g', value: '9.8 m/s²', note: '与手雷相同' },
+          { group: '时间/物理', name: '出手高度 h₀', value: '趴0.3 / 蹲1.0 / 站1.8 / 跳2.4', note: '沿用身位' },
+          { group: '时间/物理', name: '仰角上限', value: '趴45° / 其余79.5°', note: '与手雷相同' },
+          {
+            group: '时间/物理',
+            name: '拟合锚点',
+            value: '10°≈70 · 15°≈106 · 74.5°≈112 · 79.5°≈77',
+            note: '站立点射；平射/5°旧数据已弃用',
+          },
+          { group: '时间/物理', name: '引信', value: '无', note: '界面掐雷显示为 —，看飞行时间' },
         ],
       },
     ],
     tactics: [
       {
+        title: '电击箭矢 · 点射（暂定）',
+        condition: 'v₀≈45 · 无补角',
+        detail: '以上方准星读 α；10°≈70m、15°≈106m、74.5°≈112m、79.5°≈77m。满蓄未建模。',
+      },
+      {
         title: '72 米空爆 / 平弧',
-        condition: '落地弹地关闭（默认）',
+        condition: '落地弹地关闭（默认）· 5s 手雷',
         detail: '掐雷落地即炸；趴满 45° 空爆，站立静止约 27° 落地，实战常用。',
       },
       {
         title: '75 米落地弹地',
-        condition: '开启落地弹地 · 拉栓即投',
+        condition: '开启落地弹地 · 拉栓即投 · 5s 手雷',
         detail: '瞄准落地约 72m，反弹 +3m / 0.3s 至 75m；快捷 75m 会自动勾选。',
       },
       {
         title: '83 / 88～95 米',
-        condition: '叠加速度 / 跳投',
+        condition: '叠加速度 / 跳投 · 5s 手雷',
         detail: '蹲走 +2.3 或站走 +3.8；极限靠前跳，见动态方案表。',
       },
     ],
@@ -246,3 +272,24 @@ export const UNIVERSAL_72: UniversalPreset[] = [
   { id: 'p83', title: '83m 远距压制', targetM: 83, note: '蹲走 / 站走' },
   { id: 'p90', title: '88～95m 极限', targetM: 90, note: '站走 / 前跳' },
 ]
+
+/** 电击箭矢点射快捷距离（拟合暂定） */
+export const ARROW_PRESETS: UniversalPreset[] = [
+  { id: 'a70', title: '70m 点射', targetM: 70, note: '站立静止约 10°' },
+  { id: 'a100', title: '100m 点射', targetM: 100, note: '约 15° 一带' },
+  { id: 'a112', title: '112m 高抛', targetM: 112, note: '约 74.5° 实测锚点' },
+  { id: 'a77', title: '77m 接近垂直', targetM: 77, note: '约 79.5° 满角' },
+]
+
+export function presetsForThrowable(th: ThrowableDef): UniversalPreset[] {
+  if (th.model === 'luna_arrow') return ARROW_PRESETS
+  return UNIVERSAL_72
+}
+
+/** 写入 ThrowParams 的弹道覆盖（未定义则沿用 physics 默认） */
+export function ballisticOf(th: ThrowableDef): Pick<ThrowParams, 'v0' | 'offsetDeg'> {
+  const out: Pick<ThrowParams, 'v0' | 'offsetDeg'> = {}
+  if (th.v0 != null) out.v0 = th.v0
+  if (th.offsetDeg != null) out.offsetDeg = th.offsetDeg
+  return out
+}

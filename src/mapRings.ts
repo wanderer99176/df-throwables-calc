@@ -47,11 +47,13 @@ export const MAP_RING_LAYERS: MapRingLayer[] = [
 export function maxRangeForAction(
   actionId: ActionModeId,
   deltaH = 0,
+  ballistic: Pick<ThrowParams, 'v0' | 'offsetDeg'> = {},
 ): { rangeM: number; alpha: number } {
   const params: ThrowParams = {
     actionId,
     heightMode: 'action',
     deltaH,
+    ...ballistic,
   }
   const { alpha, result } = findMaxRangeAngle(params)
   return { rangeM: result.range, alpha }

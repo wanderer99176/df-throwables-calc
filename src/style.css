@@ -1434,6 +1434,12 @@ body.desktop.ruler-only .desk-live-grid strong {
   font-variant-numeric: tabular-nums;
 }
 
+body.desktop.ruler-only .desk-live-grid em {
+  font-style: normal;
+  font-size: inherit;
+  color: inherit;
+}
+
 body.desktop.ruler-only .desk-live-grid #desk-live-cook {
   color: #ffd27a;
 }

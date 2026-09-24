@@ -15,7 +15,7 @@ import {
   rangeAtAngle,
   solveAnglesForRange,
 } from './physics'
-import { OPERATORS, UNIVERSAL_72, getOperator, type OperatorId } from './operators'
+import { OPERATORS, ballisticOf, getOperator, presetsForThrowable, type OperatorId } from './operators'
 import { optionKey, solveAllActionOptions, type ThrowOption } from './options'
 import { drawTacticalTrajectory } from './trajChart'
 import { getCompTip } from './compTips'
@@ -107,10 +107,12 @@ let applyPitch: (v: number) => void = (v) => {
 }
 
 function params(): ThrowParams {
+  const th = currentThrowable()
   return {
     actionId: state.actionId,
     heightMode: 'action',
     deltaH: state.deltaH,
+    ...ballisticOf(th),
   }
 }
 
@@ -234,7 +236,7 @@ function buildApp(): void {
             </div>
             <div class="row">
               <input type="range" id="target-range" min="1" max="95" step="0.5" value="${state.targetM}" />
-              <input type="number" id="target" min="1" max="100" step="0.1" value="${state.targetM}" />
+              <input type="number" id="target" min="1" max="180" step="0.1" value="${state.targetM}" />
             </div>
             <em class="field-note">按水平距离；斜距请先换算 √(斜距²−Δh²)</em>
           </div>
@@ -308,7 +310,7 @@ function buildApp(): void {
                     <div class="desk-sec-head">跟随实时</div>
                     <div class="desk-live-grid">
                       <span>α<strong id="desk-live-alpha">--°</strong></span>
-                      <span>掐雷<strong id="desk-live-cook">--</strong></span>
+                      <span><em id="desk-live-cook-lab">掐雷</em><strong id="desk-live-cook">--</strong></span>
                       <span>R<strong id="desk-live-r">--</strong></span>
                       <span>Δh<strong id="desk-live-dh">--</strong></span>
                     </div>
@@ -317,7 +319,7 @@ function buildApp(): void {
                     <div class="desk-sec-head">目标标注 · 红虚</div>
                     <div class="desk-alpha"><em>标 α</em><strong id="desk-alpha-v">--°</strong></div>
                     <div class="desk-fields">
-                      <label class="desk-field">R<input type="number" id="desk-target" min="1" max="100" step="0.5" value="${deskAimR}" title="目标距离(m)，固定红虚线" /></label>
+                      <label class="desk-field">R<input type="number" id="desk-target" min="1" max="180" step="0.5" value="${deskAimR}" title="目标距离(m)，固定红虚线" /></label>
                       <label class="desk-field">Δh<input type="number" id="desk-dh" min="-30" max="40" step="0.5" value="${deskAimDh}" title="相对高度差(m)，固定红虚线" /></label>
                     </div>
                   </div>
@@ -434,6 +436,7 @@ function buildApp(): void {
   renderSkillBar()
   renderUniversal()
   renderTactics()
+  syncTargetLimits()
   wireEvents()
   wireDesktop()
   wireMaskFovBar()
@@ -460,6 +463,7 @@ function buildApp(): void {
       onMapChange: (id) => syncMapSwitchLabel(id),
     })
     mapBoard.setDeltaH(state.deltaH)
+    mapBoard.setBallistic(ballisticOf(currentThrowable()))
     wireMapSwitcher()
     syncMapSwitchLabel(mapBoard.getMapId())
   }
@@ -715,24 +719,54 @@ function renderActionModes(): void {
       </div>`
         })
         .join('') +
-      `<label class="tiny-check probe-toggle" title="开启后按「拉栓即投」：落地后反弹 +3m / 0.3s，申报距离=落地+3；关闭则掐雷落地即炸">
+      (currentThrowable().fuseS != null
+        ? `<label class="tiny-check probe-toggle" title="开启后按「拉栓即投」：落地后反弹 +3m / 0.3s，申报距离=落地+3；关闭则掐雷落地即炸">
       <input type="checkbox" id="toggle-probe" ${state.probeBounce ? 'checked' : ''} />
       落地弹地（+3m / 0.3s）
     </label>`
+        : '')
   }
   renderDeskActions()
+}
+
+function syncTargetLimits(): void {
+  const th = currentThrowable()
+  const maxM = th.targetMaxM ?? 95
+  const rangeEl = document.querySelector<HTMLInputElement>('#target-range')
+  const numEl = document.querySelector<HTMLInputElement>('#target')
+  const deskEl = document.querySelector<HTMLInputElement>('#desk-target')
+  if (rangeEl) rangeEl.max = String(maxM)
+  if (numEl) numEl.max = String(maxM)
+  if (deskEl) deskEl.max = String(maxM)
+  if (state.targetM > maxM) {
+    state.targetM = maxM
+    deskAimR = Math.min(deskAimR, maxM)
+  }
+}
+
+/** 切换道具后：弹道参数、距离上限、快捷卡、落地弹地可用性 */
+function applyThrowableContext(): void {
+  const th = currentThrowable()
+  if (th.fuseS == null) setProbeBounce(false)
+  syncTargetLimits()
+  renderUniversal()
+  renderActionModes()
+  mapBoard?.setBallistic(ballisticOf(th))
 }
 
 function renderUniversal(): void {
   const box = document.querySelector('#universal')
   if (!box) return
-  box.innerHTML = UNIVERSAL_72.map(
-    (p) =>
-      `<button type="button" class="preset-card" data-uni="${p.id}">
+  const list = presetsForThrowable(currentThrowable())
+  box.innerHTML = list
+    .map(
+      (p) =>
+        `<button type="button" class="preset-card" data-uni="${p.id}">
         <strong>${p.title}</strong>
         <em>${p.note}</em>
       </button>`,
-  ).join('')
+    )
+    .join('')
 }
 
 function renderTactics(): void {
@@ -797,7 +831,8 @@ function renderOptionsTable(): void {
     state.targetM,
     state.deltaH,
     'action',
-    state.probeBounce,
+    state.probeBounce && th.fuseS != null,
+    ballisticOf(th),
   )
   opts = [...opts].sort((a, b) => b.flightTime - a.flightTime)
 
@@ -963,7 +998,8 @@ function wireEvents(): void {
         state.targetM,
         state.deltaH,
         'action',
-        state.probeBounce,
+        state.probeBounce && currentThrowable().fuseS != null,
+        ballisticOf(currentThrowable()),
       )
       const best =
         opts.find((o) => o.recommended) ??
@@ -1042,6 +1078,7 @@ function wireEvents(): void {
       renderCascade()
       renderSkillBar()
       renderTactics()
+      applyThrowableContext()
       syncTarget(state.targetM)
       return
     }
@@ -1051,7 +1088,8 @@ function wireEvents(): void {
       state.showSkillPanel = false
       renderCascade()
       renderSkillBar()
-      render()
+      applyThrowableContext()
+      syncTarget(state.targetM)
       return
     }
     const action = t.getAttribute('data-action') as ActionModeId | null
@@ -1070,11 +1108,12 @@ function wireEvents(): void {
     }
     const uni = t.getAttribute('data-uni')
     if (uni) {
-      const p = UNIVERSAL_72.find((x) => x.id === uni)
+      const p = presetsForThrowable(currentThrowable()).find((x) => x.id === uni)
       if (p) {
-        // 75m 经典路径依赖落地弹地；72m 默认关
-        if (p.id === 'p75') setProbeBounce(true)
-        else if (p.id === 'p72') setProbeBounce(false)
+        if (currentThrowable().fuseS != null) {
+          if (p.id === 'p75') setProbeBounce(true)
+          else if (p.id === 'p72') setProbeBounce(false)
+        }
         syncTarget(p.targetM)
       }
       return
@@ -1484,8 +1523,10 @@ function render(): void {
       setText('#pitch-range-live', `落地 ${safe(cur.range, 1)}m`)
     }
 
-    // 掐雷：引信剩余 = 引信总时长 − 飞行时间（落地/空爆前需提前拉栓的时长）
+    // 掐雷：引信剩余 = 引信总时长 − 飞行时间；无引信（电箭）侧栏改显飞行时间
+    const cookLab = document.querySelector('#desk-live-cook-lab')
     if (th.fuseS != null && Number.isFinite(cur.flightTime)) {
+      if (cookLab) cookLab.textContent = '掐雷'
       const cook = th.fuseS - cur.flightTime
       if (cook < 0) {
         setText('#cook-v', '来不及')
@@ -1496,8 +1537,12 @@ function render(): void {
         setText('#desk-live-cook', cookTxt)
       }
     } else {
+      if (cookLab) cookLab.textContent = '飞行'
       setText('#cook-v', '—')
-      setText('#desk-live-cook', '—')
+      setText(
+        '#desk-live-cook',
+        Number.isFinite(cur.flightTime) ? `${safe(cur.flightTime, 2)}s` : '—',
+      )
     }
 
     setText('#model-blurb', th.blurb || mode.detail)

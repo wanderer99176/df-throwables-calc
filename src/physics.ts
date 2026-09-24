@@ -4,6 +4,10 @@ export const V0 = 27
 export const G = 9.8
 export const THETA_OFFSET_DEG = 7.5
 
+/** 露娜电击箭矢 · 站立点射实测拟合（暂定；满蓄另议） */
+export const LUNA_ARROW_V0 = 45
+export const LUNA_ARROW_OFFSET_DEG = 0
+
 export const H0_SWITCH_ALPHA = 45
 export const H0_PRONE = 0.3
 export const H0_STAND = 1.8

@@ -14,7 +14,7 @@ import {
 } from './physics'
 import type { ThrowableDef } from './operators'
 
-const X_MAX_DEFAULT = 100
+const X_MAX_DEFAULT = 220
 const Y_MIN_DEFAULT = -10
 const Y_MAX_DEFAULT = 30
 /** 坐标轴统一格距（米）：横纵同比例，一格 5m */
@@ -174,7 +174,7 @@ export function drawTacticalTrajectory(
     ) + GRID_M,
   )
   const needYMax = Math.min(
-    45,
+    90,
     Math.max(
       Y_MAX_DEFAULT,
       hud.apexH + GRID_M,

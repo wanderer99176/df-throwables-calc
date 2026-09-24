@@ -34,6 +34,7 @@ function markerKeys(mapId: string) {
 
 export interface MapBoardHandle {
   setDeltaH: (dh: number) => void
+  setBallistic: (b: { v0?: number; offsetDeg?: number }) => void
   setMap: (mapId: string) => void
   getMapId: () => string
   redraw: () => void
@@ -56,6 +57,7 @@ interface BoardState {
   self: Pt | null
   activeLayers: Set<string>
   deltaH: number
+  ballistic: { v0?: number; offsetDeg?: number }
   placeMode: PlaceMode
 }
 
@@ -103,6 +105,7 @@ export function mountMapBoard(
   if (!canvas || !statusEl || !layerBox) {
     return {
       setDeltaH: () => {},
+      setBallistic: () => {},
       setMap: () => {},
       getMapId: () => DEFAULT_MAP_ID,
       redraw: () => {},
@@ -133,6 +136,7 @@ export function mountMapBoard(
       MAP_RING_LAYERS.filter((l) => l.defaultOn).map((l) => l.id),
     ),
     deltaH: 0,
+    ballistic: {},
     placeMode: 'blast',
   }
 
@@ -197,7 +201,7 @@ export function mountMapBoard(
 
   layerBox.innerHTML = MAP_RING_LAYERS.map((layer) => {
     const checked = state.activeLayers.has(layer.id) ? 'checked' : ''
-    const { rangeM } = maxRangeForAction(layer.actionId, state.deltaH)
+    const { rangeM } = maxRangeForAction(layer.actionId, state.deltaH, state.ballistic)
     return `<label class="map-layer" style="--ring:${layer.stroke}">
       <input type="checkbox" data-layer="${layer.id}" ${checked} />
       <span class="map-layer-swatch"></span>
@@ -211,7 +215,7 @@ export function mountMapBoard(
         .querySelector(`input[data-layer="${layer.id}"]`)
         ?.parentElement?.querySelector('em')
       if (!em) continue
-      em.textContent = `${maxRangeForAction(layer.actionId, state.deltaH).rangeM.toFixed(0)}m`
+      em.textContent = `${maxRangeForAction(layer.actionId, state.deltaH, state.ballistic).rangeM.toFixed(0)}m`
     }
   }
 
@@ -298,7 +302,7 @@ export function mountMapBoard(
     cy: number,
     layer: MapRingLayer,
   ): void => {
-    const { rangeM } = maxRangeForAction(layer.actionId, state.deltaH)
+    const { rangeM } = maxRangeForAction(layer.actionId, state.deltaH, state.ballistic)
     const { scale } = layout()
     const rPx = (rangeM / effectiveScale()) * scale
     ctx.beginPath()
@@ -339,8 +343,8 @@ export function mountMapBoard(
       const layers = MAP_RING_LAYERS.filter((l) => state.activeLayers.has(l.id))
       const sorted = [...layers].sort(
         (a, b) =>
-          maxRangeForAction(b.actionId, state.deltaH).rangeM -
-          maxRangeForAction(a.actionId, state.deltaH).rangeM,
+          maxRangeForAction(b.actionId, state.deltaH, state.ballistic).rangeM -
+          maxRangeForAction(a.actionId, state.deltaH, state.ballistic).rangeM,
       )
       for (const layer of sorted) drawRing(ctx, c.x, c.y, layer)
     }
@@ -666,6 +670,12 @@ export function mountMapBoard(
   return {
     setDeltaH: (dh: number) => {
       state.deltaH = dh
+      refreshLayerLabels()
+      updateStatus()
+      draw()
+    },
+    setBallistic: (b) => {
+      state.ballistic = { ...b }
       refreshLayerLabels()
       updateStatus()
       draw()
