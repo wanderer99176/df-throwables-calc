@@ -8,6 +8,9 @@ import {
   type BallisticResult,
   type ThrowParams,
   LUNA_AIRBURST_S,
+  LUNA_ARROW_CAP_COMMUNITY,
+  LUNA_ARROW_OFFSET_DEG,
+  LUNA_ARROW_V0,
   LUNA_BOUNCE_M,
   LUNA_BOUNCE_S,
   findMaxRangeAngle,
@@ -108,6 +111,16 @@ let applyPitch: (v: number) => void = (v) => {
 
 function params(): ThrowParams {
   const th = currentThrowable()
+  // 蓄力待测：禁止误用手雷默认 v0；占位用点射参数仅避免崩溃，UI 会拦截反解
+  if (th.ballisticPending) {
+    return {
+      actionId: state.actionId,
+      heightMode: 'action',
+      deltaH: state.deltaH,
+      v0: LUNA_ARROW_V0,
+      offsetDeg: LUNA_ARROW_OFFSET_DEG,
+    }
+  }
   return {
     actionId: state.actionId,
     heightMode: 'action',
@@ -820,6 +833,14 @@ function renderOptionsTable(): void {
   if (distEl) distEl.textContent = state.targetM.toFixed(1)
 
   const th = currentThrowable()
+  if (th.ballisticPending) {
+    if (body) {
+      body.innerHTML = `<tr><td colspan="8" class="empty">「${th.name}」弹道尚未拟合 · 请切换到「电击箭矢不蓄力」计算仰角与飞行；本页仅保留机制属性表</td></tr>`
+      ;(body as HTMLElement & { __opts?: ThrowOption[] }).__opts = []
+    }
+    return
+  }
+
   const fuse = th.fuseS
   const cookOf = (flight: number): number | null => {
     if (fuse == null) return null
@@ -989,6 +1010,12 @@ function wireEvents(): void {
     if (syncLock) return
     syncLock = true
     state.targetM = Math.max(0.1, v)
+    if (currentThrowable().ballisticPending) {
+      syncInputs()
+      syncLock = false
+      render()
+      return
+    }
     const aimLand = aimLandForDeclare(state.targetM)
     const sol = solveAnglesForRange(aimLand, params())
     let pick = sol.low ?? sol.high
@@ -1513,7 +1540,24 @@ function render(): void {
     )
     setText('#desk-live-dh', `${safe(state.deltaH, 1)}`)
     setText('#range-v', `${safe(cur.range, 1)}m`)
-    setText('#time-v', `${safe(cur.flightTime, 2)}s`)
+    // 电箭：无阻力模型飞行偏短；满角社区验证约 14s，读数旁标注
+    if (
+      th.model === 'luna_arrow' &&
+      !th.ballisticPending &&
+      Number.isFinite(cur.flightTime)
+    ) {
+      const nearCap =
+        Math.abs(state.pitch - LUNA_ARROW_CAP_COMMUNITY.alpha) < 1.2 &&
+        Math.abs(cur.range - LUNA_ARROW_CAP_COMMUNITY.rangeM) < 12
+      setText(
+        '#time-v',
+        nearCap
+          ? `${safe(cur.flightTime, 2)}s（社区≈${LUNA_ARROW_CAP_COMMUNITY.flightS}s）`
+          : `${safe(cur.flightTime, 2)}s`,
+      )
+    } else {
+      setText('#time-v', `${safe(cur.flightTime, 2)}s`)
+    }
     if (canApplyProbe(cur, th)) {
       setText(
         '#pitch-range-live',
@@ -1539,10 +1583,25 @@ function render(): void {
     } else {
       if (cookLab) cookLab.textContent = '飞行'
       setText('#cook-v', '—')
-      setText(
-        '#desk-live-cook',
-        Number.isFinite(cur.flightTime) ? `${safe(cur.flightTime, 2)}s` : '—',
-      )
+      if (th.ballisticPending) {
+        setText('#desk-live-cook', '—')
+        setText('#desk-live-r', '—')
+        setText('#range-v', '—')
+        setText('#time-v', '—')
+      } else {
+        const nearCap =
+          th.model === 'luna_arrow' &&
+          Math.abs(state.pitch - LUNA_ARROW_CAP_COMMUNITY.alpha) < 1.2 &&
+          Math.abs(cur.range - LUNA_ARROW_CAP_COMMUNITY.rangeM) < 12
+        setText(
+          '#desk-live-cook',
+          Number.isFinite(cur.flightTime)
+            ? nearCap
+              ? `${safe(cur.flightTime, 2)}s≈${LUNA_ARROW_CAP_COMMUNITY.flightS}`
+              : `${safe(cur.flightTime, 2)}s`
+            : '—',
+        )
+      }
     }
 
     setText('#model-blurb', th.blurb || mode.detail)
@@ -1551,7 +1610,32 @@ function render(): void {
 
     try {
       const canvas = document.querySelector<HTMLCanvasElement>('#traj')
-      if (canvas) {
+      const bot = document.querySelector('#traj-hud-bottom')
+      if (th.ballisticPending) {
+        if (canvas) {
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            const dpr = window.devicePixelRatio || 1
+            const W = Math.max(1, canvas.clientWidth || 640)
+            const H = Math.max(1, canvas.clientHeight || 360)
+            canvas.width = Math.floor(W * dpr)
+            canvas.height = Math.floor(H * dpr)
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+            ctx.clearRect(0, 0, W, H)
+            ctx.fillStyle = 'rgba(180, 200, 220, 0.75)'
+            ctx.font = '600 14px Segoe UI, Microsoft YaHei, sans-serif'
+            ctx.textAlign = 'center'
+            ctx.fillText('蓄力弹道尚未拟合', W / 2, H / 2 - 8)
+            ctx.font = '12px Segoe UI, Microsoft YaHei, sans-serif'
+            ctx.fillText('请切换到「电击箭矢不蓄力」查看抛物线与伤害范围', W / 2, H / 2 + 14)
+            ctx.textAlign = 'left'
+          }
+        }
+        if (bot) {
+          bot.innerHTML =
+            '<span class="muted-hint">蓄力仅展示机制属性（出伤/持续/重伤等）；弹道反解待补测</span>'
+        }
+      } else if (canvas) {
         const hud = drawTacticalTrajectory(
           canvas,
           cur,
@@ -1560,16 +1644,25 @@ function render(): void {
           state.targetM,
           state.probeBounce,
         )
-        const bot = document.querySelector('#traj-hud-bottom')
         if (bot) {
           const vMoveTxt = hud.vMove > 0 ? `+${hud.vMove.toFixed(2)} m/s` : '0'
+          const blastHint =
+            th.blastRadiusM != null
+              ? `<span>${th.blastLabel ?? '杀伤半径'} <b>${th.blastRadiusM}m</b></span>`
+              : ''
+          const timeHint =
+            th.model === 'luna_arrow'
+              ? `<span class="muted-hint">模型飞行 ${hud.flightTime.toFixed(2)}s · 满角社区≈${LUNA_ARROW_CAP_COMMUNITY.flightS}s</span>`
+              : ''
           bot.innerHTML = `
             <span>【弹道特征】最高高度 <b>${hud.apexH.toFixed(1)}m</b>（t=${hud.apexT.toFixed(2)}s）</span>
-            <span>离手初速 <b>27 m/s</b>（${vMoveTxt}）</span>
+            <span>离手初速 <b>${(p.v0 ?? 27).toFixed(0)} m/s</b>（${vMoveTxt}）</span>
             <span>起投高度 h₀ <b>${hud.h0.toFixed(1)}m</b></span>
             <span>落地 <b>${hud.range.toFixed(1)}m</b></span>
-            <span>爆点 <b>${hud.blastEndM.toFixed(1)}m</b>${hud.bounce ? '（落地弹地）' : '（落地即炸）'}${hud.airburst ? ' · 空爆' : ''}</span>
-            ${hud.selfHit ? '<span class="warn">⚠ 杀伤圈覆盖起投点（自伤）</span>' : ''}
+            <span>爆点 <b>${hud.blastEndM.toFixed(1)}m</b>${hud.bounce ? '（落地弹地）' : th.fuseS == null ? '（触地生效）' : '（落地即炸）'}${hud.airburst ? ' · 空爆' : ''}</span>
+            ${blastHint}
+            ${timeHint}
+            ${hud.selfHit ? '<span class="warn">⚠ 效果圈覆盖起投点</span>' : ''}
             ${!state.probeBounce && th.fuseS != null ? '<span class="muted-hint">落地弹地关闭</span>' : ''}
           `
         }

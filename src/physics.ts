@@ -7,6 +7,8 @@ export const THETA_OFFSET_DEG = 7.5
 /** 露娜电击箭矢 · 站立点射实测拟合（暂定；满蓄另议） */
 export const LUNA_ARROW_V0 = 45
 export const LUNA_ARROW_OFFSET_DEG = 0
+/** 社区验证：站立最高仰角 79.5° 点射约 77m，飞行约 14s（无阻力模型约 9s，偏短） */
+export const LUNA_ARROW_CAP_COMMUNITY = { alpha: 79.5, rangeM: 77, flightS: 14 } as const
 
 export const H0_SWITCH_ALPHA = 45
 export const H0_PRONE = 0.3

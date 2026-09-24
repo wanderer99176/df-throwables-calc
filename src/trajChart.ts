@@ -309,11 +309,12 @@ export function drawTacticalTrajectory(
   {
     const lx = originX + usedW - 168
     const ly = Math.max(8, originY - 22)
+    const blastName = th.blastLabel ?? '杀伤半径'
     ctx.font = '600 10px Segoe UI, Microsoft YaHei, sans-serif'
     ctx.fillStyle = 'rgba(160, 210, 255, 0.9)'
     ctx.fillText('┄ 拉环声', lx, ly)
     ctx.fillStyle = 'rgba(255, 200, 80, 0.9)'
-    ctx.fillText('○ 杀伤半径', lx + 58, ly)
+    ctx.fillText(`○ ${blastName}`, lx + 58, ly)
     if (soundR > 0) {
       ctx.fillStyle = 'rgba(160, 210, 255, 0.55)'
       ctx.font = '10px Consolas, monospace'
@@ -351,7 +352,12 @@ export function drawTacticalTrajectory(
     ctx.font = '600 10px Consolas, monospace'
     ctx.fillText(`α ${cur.alpha.toFixed(1)}°`, ox + 8, oy - 28)
     ctx.fillStyle = 'rgba(160, 210, 255, 0.9)'
-    ctx.fillText(`θ +${THETA_OFFSET_DEG}°`, ox + 8, oy - 16)
+    const offShow = params.offsetDeg ?? THETA_OFFSET_DEG
+    ctx.fillText(
+      offShow === 0 ? 'θ = α（无补角）' : `θ +${offShow}°`,
+      ox + 8,
+      oy - 16,
+    )
   }
 
   // 空爆时抛物线画到爆点即止
@@ -487,18 +493,24 @@ export function drawTacticalTrajectory(
     )
   }
 
-  // 伤害范围：仅画有效爆炸半径（面板 8m）；中心→边缘线性衰减用径向渐变示意，不再另画“核心圈”
+  // 伤害/杀伤范围圆（以落点或空爆点为圆心）
   if (blastR > 0) {
     const cx = tx(blast.x)
     const cy = ty(blast.y)
     const rEdge = worldR(blastR)
     const gy = ty(0)
+    const blastName = th.blastLabel ?? '杀伤半径'
+    const isArrowZone = th.model === 'luna_arrow'
 
     const fill = ctx.createRadialGradient(cx, cy, 0, cx, cy, rEdge)
     if (hud.selfHit) {
       fill.addColorStop(0, 'rgba(255, 70, 50, 0.45)')
       fill.addColorStop(0.55, 'rgba(255, 90, 60, 0.2)')
       fill.addColorStop(1, 'rgba(255, 120, 80, 0.04)')
+    } else if (isArrowZone) {
+      fill.addColorStop(0, 'rgba(80, 200, 255, 0.35)')
+      fill.addColorStop(0.5, 'rgba(80, 180, 255, 0.14)')
+      fill.addColorStop(1, 'rgba(80, 160, 255, 0.03)')
     } else {
       fill.addColorStop(0, 'rgba(255, 80, 50, 0.4)')
       fill.addColorStop(0.45, 'rgba(255, 160, 60, 0.18)')
@@ -510,7 +522,9 @@ export function drawTacticalTrajectory(
     ctx.fill()
     ctx.strokeStyle = hud.selfHit
       ? 'rgba(255, 90, 70, 0.95)'
-      : 'rgba(255, 120, 70, 0.85)'
+      : isArrowZone
+        ? 'rgba(100, 200, 255, 0.9)'
+        : 'rgba(255, 120, 70, 0.85)'
     ctx.lineWidth = hud.selfHit ? 2.5 : 2
     ctx.stroke()
 
@@ -518,7 +532,7 @@ export function drawTacticalTrajectory(
     if (!blast.air) {
       const xL = tx(blast.x - blastR)
       const xR = tx(blast.x + blastR)
-      ctx.strokeStyle = 'rgba(255, 160, 100, 0.9)'
+      ctx.strokeStyle = isArrowZone ? 'rgba(120, 200, 255, 0.9)' : 'rgba(255, 160, 100, 0.9)'
       ctx.lineWidth = 1.5
       for (const x of [xL, xR]) {
         ctx.beginPath()
@@ -527,17 +541,21 @@ export function drawTacticalTrajectory(
         ctx.stroke()
       }
       ctx.setLineDash([3, 3])
-      ctx.strokeStyle = 'rgba(255, 180, 120, 0.5)'
+      ctx.strokeStyle = isArrowZone ? 'rgba(120, 200, 255, 0.45)' : 'rgba(255, 180, 120, 0.5)'
       ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(xL, gy)
       ctx.lineTo(xR, gy)
       ctx.stroke()
       ctx.setLineDash([])
-      ctx.fillStyle = 'rgba(255, 200, 140, 0.95)'
+      ctx.fillStyle = isArrowZone ? 'rgba(160, 220, 255, 0.95)' : 'rgba(255, 200, 140, 0.95)'
       ctx.font = '600 10px Consolas, monospace'
       ctx.textAlign = 'center'
-      ctx.fillText(`有效半径 ${blastR}m（向外衰减）`, cx, gy + 16)
+      ctx.fillText(
+        isArrowZone ? `${blastName} 半径 ${blastR}m` : `有效半径 ${blastR}m（向外衰减）`,
+        cx,
+        gy + 16,
+      )
       ctx.textAlign = 'left'
     } else {
       ctx.setLineDash([3, 3])
@@ -553,16 +571,18 @@ export function drawTacticalTrajectory(
       ctx.fillText(`R=${blastR}m`, cx + rEdge * 0.35, cy - 5)
     }
 
-    ctx.fillStyle = '#ff6b4a'
+    ctx.fillStyle = isArrowZone ? '#6ec8ff' : '#ff6b4a'
     ctx.beginPath()
     ctx.arc(cx, cy, 4, 0, Math.PI * 2)
     ctx.fill()
 
     const tagY = cy - rEdge - 6
     ctx.font = '600 10px Segoe UI, Microsoft YaHei, sans-serif'
-    ctx.fillStyle = 'rgba(255, 180, 120, 0.95)'
+    ctx.fillStyle = isArrowZone ? 'rgba(140, 210, 255, 0.95)' : 'rgba(255, 180, 120, 0.95)'
     ctx.fillText(
-      `杀伤半径 ${blastR}m${blast.air ? ' · 空爆' : ''} · 中心高伤→边缘衰减`,
+      isArrowZone
+        ? `${blastName} ${blastR}m · 落点水平圆`
+        : `杀伤半径 ${blastR}m${blast.air ? ' · 空爆' : ''} · 中心高伤→边缘衰减`,
       cx - 72,
       tagY,
     )

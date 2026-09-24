@@ -25,9 +25,13 @@ export interface ThrowableDef {
   offsetDeg?: number
   /** 目标距离滑块建议上限（米） */
   targetMaxM?: number
+  /** true=机制表可看，弹道反解尚未拟合 */
+  ballisticPending?: boolean
+  /** 落点效果圈文案（默认「杀伤半径」） */
+  blastLabel?: string
   /** 引信总时长（秒）；无引信道具不填 */
   fuseS?: number
-  /** 有效爆炸半径（米）；落点 &lt; 此值时可能自伤 */
+  /** 有效爆炸/伤害半径（米）；落点 &lt; 此值时可能自伤 */
   blastRadiusM?: number
   /** 拉环/拉栓声传播半径（米）；以抛出点为圆心，非爆点 */
   pinSoundRadiusM?: number
@@ -54,6 +58,63 @@ const SHARED_BALLISTIC_STATS: SkillStatRow[] = [
   { group: '时间/物理', name: '隐藏仰角补角', value: '+7.5°', note: '实际抛角 θ = α + 7.5°' },
   { group: '时间/物理', name: '出手高度 h₀', value: '趴0.3 / 蹲1.0 / 站1.8 / 跳2.4', note: '随动作切换，米' },
   { group: '时间/物理', name: '前移叠速', value: '爬1.15 / 蹲2.3 / 站3.8', note: 'm/s，叠到水平初速' },
+]
+
+const LUNA_ARROW_MECH_STATS: SkillStatRow[] = [
+  { group: '定位特点', name: '武器类型', value: '特殊技能箭矢', note: '侦察 / 电击控制' },
+  { group: '机制属性', name: '充能时间', value: '50 s / 支', note: '沙发PTT 等社区测算口径' },
+  { group: '机制属性', name: '出伤延迟', value: '0.33 s', note: '命中后开始结算伤害' },
+  { group: '机制属性', name: '硬表持续时间', value: '3.5 s', note: '命中硬质表面后电场持续' },
+  { group: '机制属性', name: '打断 / 沉默', value: '打断举箭 · 沉默 10s', note: '已击发电箭效果不因沉默失效；被动会因沉默/倒地失效' },
+  { group: '爆炸伤害', name: '伤害范围', value: '半径 5 m', note: '落点水平圆；图上以落地为圆心' },
+  { group: '爆炸伤害', name: '对角色伤害', value: '7 / 秒', note: '玩家' },
+  { group: '爆炸伤害', name: '对 AI 伤害', value: '25 / 跳', note: '人机每跳' },
+  {
+    group: '爆炸伤害',
+    name: '重伤（治疗减速）',
+    value: '+46.2% 治疗道具时间',
+    note: '离开电场约 1s 后失去重伤',
+  },
+  {
+    group: '爆炸伤害',
+    name: '腹部破坏',
+    value: '电击 ≥3s',
+    note: '扣 10 点血上限，并延长部分药品 0.2s',
+  },
+]
+
+const LUNA_ARROW_TAP_BALLISTIC: SkillStatRow[] = [
+  { group: '机制属性', name: '射击模式', value: '不蓄力 / 点射', note: '与蓄力抛物线不同' },
+  { group: '机制属性', name: '准星补角', value: '0°', note: 'θ = α，无手雷 +7.5°' },
+  { group: '时间/物理', name: '初速度 v₀', value: '≈45 m/s', note: '站立点射多点拟合暂定' },
+  { group: '时间/物理', name: '重力 g', value: '9.8 m/s²', note: '无阻力抛物线' },
+  { group: '时间/物理', name: '出手高度 h₀', value: '趴0.3 / 蹲1.0 / 站1.8 / 跳2.4', note: '沿用身位' },
+  { group: '时间/物理', name: '仰角上限', value: '趴45° / 其余79.5°', note: '与手雷相同' },
+  {
+    group: '时间/物理',
+    name: '拟合锚点（落点）',
+    value: '10°≈70 · 15°≈106 · 74.5°≈112 · 79.5°≈77',
+    note: '站立点射；平射/5°旧数据已弃用',
+  },
+  {
+    group: '时间/物理',
+    name: '飞行时间说明',
+    value: '79.5°≈77m · 社区约 14s',
+    note: '无阻力模型同锚点约 9s，偏短；高抛掐时以实战/社区秒表为准，仰角仍按落点表',
+  },
+  { group: '时间/物理', name: '引信', value: '无', note: '侧栏显飞行时间，非掐雷' },
+]
+
+const LUNA_ARROW_CHARGE_STATS: SkillStatRow[] = [
+  ...LUNA_ARROW_MECH_STATS,
+  { group: '机制属性', name: '射击模式', value: '蓄力满射', note: '抛物线与点射不同' },
+  { group: '机制属性', name: '准星补角', value: '0°（预期）', note: '与点射相同读角习惯' },
+  {
+    group: '时间/物理',
+    name: '弹道模型',
+    value: '待补测',
+    note: '满蓄落点表未拟合；请先用不蓄力算仰角',
+  },
 ]
 
 const LUNA_FRAG_STATS: SkillStatRow[] = [
@@ -92,36 +153,41 @@ export const OPERATORS: OperatorDef[] = [
       FRAG_5S,
       {
         id: 'luna-arrow',
-        name: '电击箭矢',
+        name: '电击箭矢不蓄力',
         kind: 'special',
         model: 'luna_arrow',
         v0: LUNA_ARROW_V0,
         offsetDeg: LUNA_ARROW_OFFSET_DEG,
         targetMaxM: 180,
-        blurb: '点射 v₀≈45 · 无补角 · 实测拟合暂定（满蓄未建模）',
-        skillStats: [
-          { group: '定位特点', name: '武器类型', value: '特殊技能箭矢', note: '侦察 / 电击控制' },
-          { group: '机制属性', name: '射击模式', value: '点射（本版）', note: '满蓄抛物线不同，尚未建模' },
-          { group: '机制属性', name: '准星补角', value: '0°', note: 'θ = α，无手雷 +7.5°' },
-          { group: '时间/物理', name: '初速度 v₀', value: '≈45 m/s', note: '站立点射多点拟合暂定' },
-          { group: '时间/物理', name: '重力 g', value: '9.8 m/s²', note: '与手雷相同' },
-          { group: '时间/物理', name: '出手高度 h₀', value: '趴0.3 / 蹲1.0 / 站1.8 / 跳2.4', note: '沿用身位' },
-          { group: '时间/物理', name: '仰角上限', value: '趴45° / 其余79.5°', note: '与手雷相同' },
-          {
-            group: '时间/物理',
-            name: '拟合锚点',
-            value: '10°≈70 · 15°≈106 · 74.5°≈112 · 79.5°≈77',
-            note: '站立点射；平射/5°旧数据已弃用',
-          },
-          { group: '时间/物理', name: '引信', value: '无', note: '界面掐雷显示为 —，看飞行时间' },
-        ],
+        blastRadiusM: 5,
+        blastLabel: '伤害范围',
+        blurb: '点射 v₀≈45 · 无补角 · 落点拟合暂定 · 高抛飞行社区约14s（模型偏短）',
+        skillStats: [...LUNA_ARROW_MECH_STATS, ...LUNA_ARROW_TAP_BALLISTIC],
+      },
+      {
+        id: 'luna-arrow-charge',
+        name: '电击箭矢蓄力',
+        kind: 'special',
+        model: 'luna_arrow',
+        ballisticPending: true,
+        targetMaxM: 180,
+        blastRadiusM: 5,
+        blastLabel: '伤害范围',
+        blurb: '蓄力弹道尚未拟合 · 仅机制表；请用不蓄力算仰角',
+        skillStats: LUNA_ARROW_CHARGE_STATS,
       },
     ],
     tactics: [
       {
-        title: '电击箭矢 · 点射（暂定）',
-        condition: 'v₀≈45 · 无补角',
-        detail: '以上方准星读 α；10°≈70m、15°≈106m、74.5°≈112m、79.5°≈77m。满蓄未建模。',
+        title: '电击箭矢 · 不蓄力（暂定）',
+        condition: 'v₀≈45 · 无补角 · 伤害圈 5m',
+        detail:
+          '以上方准星读 α；落点 10°≈70、15°≈106、74.5°≈112、79.5°≈77。高抛飞行社区约 14s。蓄力另选道具。',
+      },
+      {
+        title: '电击箭矢 · 蓄力',
+        condition: '弹道待测',
+        detail: '机制同电箭；满蓄落点/初速未建模，勿用当前反解。',
       },
       {
         title: '72 米空爆 / 平弧',
@@ -282,12 +348,14 @@ export const ARROW_PRESETS: UniversalPreset[] = [
 ]
 
 export function presetsForThrowable(th: ThrowableDef): UniversalPreset[] {
-  if (th.model === 'luna_arrow') return ARROW_PRESETS
+  if (th.model === 'luna_arrow' && !th.ballisticPending) return ARROW_PRESETS
+  if (th.ballisticPending) return []
   return UNIVERSAL_72
 }
 
 /** 写入 ThrowParams 的弹道覆盖（未定义则沿用 physics 默认） */
 export function ballisticOf(th: ThrowableDef): Pick<ThrowParams, 'v0' | 'offsetDeg'> {
+  if (th.ballisticPending) return {}
   const out: Pick<ThrowParams, 'v0' | 'offsetDeg'> = {}
   if (th.v0 != null) out.v0 = th.v0
   if (th.offsetDeg != null) out.offsetDeg = th.offsetDeg
