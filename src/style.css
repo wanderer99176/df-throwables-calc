@@ -1419,8 +1419,8 @@ body.desktop.ruler-only .desk-live {
 
 body.desktop.ruler-only .desk-live-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 2px;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 6px;
   font-size: 9px;
   color: var(--muted);
 }
@@ -1432,6 +1432,10 @@ body.desktop.ruler-only .desk-live-grid strong {
   font-weight: 700;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+
+body.desktop.ruler-only .desk-live-grid #desk-live-cook {
+  color: #ffd27a;
 }
 
 body.desktop.ruler-only .desk-aim {

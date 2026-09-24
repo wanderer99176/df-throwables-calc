@@ -308,6 +308,7 @@ function buildApp(): void {
                     <div class="desk-sec-head">跟随实时</div>
                     <div class="desk-live-grid">
                       <span>α<strong id="desk-live-alpha">--°</strong></span>
+                      <span>掐雷<strong id="desk-live-cook">--</strong></span>
                       <span>R<strong id="desk-live-r">--</strong></span>
                       <span>Δh<strong id="desk-live-dh">--</strong></span>
                     </div>
@@ -1486,10 +1487,17 @@ function render(): void {
     // 掐雷：引信剩余 = 引信总时长 − 飞行时间（落地/空爆前需提前拉栓的时长）
     if (th.fuseS != null && Number.isFinite(cur.flightTime)) {
       const cook = th.fuseS - cur.flightTime
-      if (cook < 0) setText('#cook-v', '来不及')
-      else setText('#cook-v', `${cook.toFixed(2)}s`)
+      if (cook < 0) {
+        setText('#cook-v', '来不及')
+        setText('#desk-live-cook', '来不及')
+      } else {
+        const cookTxt = `${cook.toFixed(2)}s`
+        setText('#cook-v', cookTxt)
+        setText('#desk-live-cook', cookTxt)
+      }
     } else {
       setText('#cook-v', '—')
+      setText('#desk-live-cook', '—')
     }
 
     setText('#model-blurb', th.blurb || mode.detail)
