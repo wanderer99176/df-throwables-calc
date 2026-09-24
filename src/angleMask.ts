@@ -45,11 +45,28 @@ export function mountAngleMask(): void {
     <div class="mask-root">
       <canvas id="mask-canvas"></canvas>
       <div class="mask-meta" id="mask-meta"></div>
+      <button type="button" class="mask-close" id="mask-close" title="关闭遮罩">×</button>
     </div>
   `
 
   const canvas = document.querySelector<HTMLCanvasElement>('#mask-canvas')!
   const meta = document.querySelector<HTMLElement>('#mask-meta')!
+  const closeBtn = document.querySelector<HTMLButtonElement>('#mask-close')!
+  const maskApi = window.dfMask
+
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    maskApi?.close()
+  })
+
+  document.addEventListener(
+    'mousemove',
+    (e) => {
+      const overClose = Boolean((e.target as HTMLElement | null)?.closest?.('#mask-close'))
+      maskApi?.setPassthroughIgnore?.(!overClose)
+    },
+    { passive: true },
+  )
 
   const paint = () => {
     const cfg = loadConfig()

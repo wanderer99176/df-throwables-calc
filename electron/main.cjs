@@ -340,11 +340,12 @@ function createMaskWindow() {
     alwaysOnTop: true,
     resizable: false,
     movable: false,
-    focusable: false,
+    focusable: true,
     skipTaskbar: true,
     show: false,
     title: 'DF仰角遮罩',
     webPreferences: {
+      preload: path.join(__dirname, 'preload-mask.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -354,7 +355,8 @@ function createMaskWindow() {
   maskWin.setAlwaysOnTop(true, 'screen-saver')
   maskWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   applyMaskLayout()
-  maskWin.setIgnoreMouseEvents(true)
+  // 默认点穿；关闭钮区域由页面临时取消 ignore
+  maskWin.setIgnoreMouseEvents(true, { forward: true })
 
   maskWin.once('ready-to-show', () => {
     applyMaskLayout()
@@ -536,6 +538,15 @@ if (gotLock) {
     })
     ipcMain.on('desktop:open-mask', () => {
       createMaskWindow()
+    })
+    ipcMain.on('desktop:close-mask', () => {
+      if (!maskWin || maskWin.isDestroyed()) return
+      maskWin.close()
+    })
+    ipcMain.on('desktop:set-mask-passthrough-ignore', (_e, ignore) => {
+      if (!maskWin || maskWin.isDestroyed()) return
+      if (ignore) maskWin.setIgnoreMouseEvents(true, { forward: true })
+      else maskWin.setIgnoreMouseEvents(false)
     })
     ipcMain.on('desktop:set-follow', (_e, enabled) => {
       if (enabled) startMouseFollow()

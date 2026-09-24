@@ -2,7 +2,7 @@
 
 《三角洲行动》干员投掷物的**离线弹道尺子与定点打击计算器**（露娜 5s 手雷 / 电击箭矢、乌鲁鲁燃烧瓶、牧羊人 2s 手雷等）。
 
-当前便携版：**[v0.3.5](https://github.com/wanderer99176/df-throwables-calc/releases/tag/v0.3.5)** · `DF-Throwables-Ruler-0.3.5-portable.exe`
+当前便携版：**[v0.3.6](https://github.com/wanderer99176/df-throwables-calc/releases/tag/v0.3.6)** · `DF-Throwables-Ruler-0.3.6-portable.exe`
 
 - 按目标距离反解视角仰角 α，并给出多种身位 / 动作方案  
 - **弹道侧边尺**（左）：跟随 / 目标标注 / 全角距离刻度  
@@ -23,7 +23,7 @@
 不需要安装 Node.js，也不用敲命令。
 
 1. 打开 [Releases（发布页）](https://github.com/wanderer99176/df-throwables-calc/releases)  
-2. 下载最新的 **`DF-Throwables-Ruler-*-portable.exe`**（Windows 64 位便携版，当前推荐 **0.3.5**）  
+2. 下载最新的 **`DF-Throwables-Ruler-*-portable.exe`**（Windows 64 位便携版，当前推荐 **0.3.6**）  
 3. 放到任意文件夹，**双击运行**即可  
 
 启动后**只打开计算器**（排版随窗口横/竖自动切换；**刻度详情**默认开启）。顶栏可按需打开侧栏：
@@ -51,6 +51,7 @@
 
 | 版本 | 要点 |
 | --- | --- |
+| **0.3.6** | 仰角遮罩右上角增加关闭钮（其余区域仍点穿） |
 | **0.3.5** | 窗口缩小 / 竖屏时战术弹道图不再只露上半截，按容器等比铺满 |
 | **0.3.4** | 竖屏干员/道具级联间距；去掉强制 9:16 遮罩比例 |
 | **0.3.3** | 竖屏右侧仰角刻度更紧凑 |
@@ -92,7 +93,7 @@ npm install
 - **浓度**：0 更淡、100 更实，避免挡画面
 - FOV / 画幅
 
-默认贴在**左边**。`Ctrl+Shift+M` 显隐。
+默认贴在**左边**。右上角 **×** 可关；`Ctrl+Shift+M` 显隐。
 
 ---
 

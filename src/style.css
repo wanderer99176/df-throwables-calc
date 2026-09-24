@@ -1012,11 +1012,34 @@ body.desktop.angle-mask #app {
   position: absolute;
   left: 6px;
   top: 8px;
-  right: 4px;
+  right: 28px;
   font: 600 10px/1.35 var(--font-body);
   color: rgba(200, 210, 220, 0.7);
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.mask-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 140, 140, 0.45);
+  border-radius: 4px;
+  background: rgba(12, 18, 28, 0.72);
+  color: #ff9a9a;
+  font: 700 16px/1 "Segoe UI", sans-serif;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.mask-close:hover {
+  background: rgba(40, 18, 22, 0.92);
+  border-color: rgba(255, 120, 120, 0.8);
+  color: #ffc0c0;
 }
 
 .mask-fov-bar {

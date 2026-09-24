@@ -37,9 +37,17 @@ export interface DfDesktopApi {
   onPitchZero: (cb: () => void) => void
 }
 
+export interface DfMaskApi {
+  isMask: true
+  close: () => void
+  /** true=整窗点穿；false=可点关闭钮 */
+  setPassthroughIgnore: (ignore: boolean) => void
+}
+
 declare global {
   interface Window {
     dfDesktop?: DfDesktopApi
+    dfMask?: DfMaskApi
     dfApp?: {
       isShell: true
       openRuler: () => void
